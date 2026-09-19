@@ -8,6 +8,28 @@
 
 ## 记录
 
+### 2026-09-19 跟进上游 0.1.6-alpha：移除 better-sidebar + 自有模块链接迁移 + token-usage v0.2.3
+
+- 模块：平台 + dsh-token-usage
+- 需求：上游 0.1.6-alpha 内置右侧栏（文件树 / 终端 / 内嵌浏览器 / 文档预览）后同步本项目：移除 dsh-better-sidebar，token-usage 酌情优化
+- 结果：
+  - 移除 dsh-better-sidebar：`dspm uninstall`（bun remove + reconcileBundles 摘除）+ registry 清空，profile 依赖与 bundles 已净；活文档引用全清（README / AGENTS / design / architecture / PRODUCT / SECURITY / RELIABILITY / FRONTEND / TEST / reference），`docs/reference/dsh-better-sidebar.md` 删除，历史迭代记录保留
+  - 重大发现：0.1.6-alpha 引入 ResolutionRouter（dsh-app-boot），profile 上下文只解析 profile package.json 声明 + profile 自身 node_modules 内的本地包，旧链接位 `~/.dsh/profiles/node_modules` 不再参与解析，自有模块启动即 ERR_MODULE_NOT_FOUND 整树崩溃。dspm installOwn 迁移：链接 A 落 `profiles/web/node_modules` + 自动写 `link:./<name>` 依赖声明，旧位链接安装/卸载时自动摘除；ownStatus / doctor 增加依赖声明与 legacy 残留检查；运行树探测按启动通道优先匹配 bunx 缓存目录（`dsh@alpha` / `dsh@latest` 共存时不再装错树）
+  - token-usage v0.2.3：刷新改 stale-while-revalidate（保留旧视图、按钮显示刷新中、刷新失败保留旧数据）；页面重新可见自动静默刷新（走 host 60s 缓存）；上游 token-meter 确认 usage 字段名未变（inputTokens / cacheReadTokens / cacheWriteTokens / outputTokens / reasoningTokens），聚合契约兼容
+  - 观察：latest 通道 bunx 缓存内部包版本错位（dsh-jobs 0.1.2-rc.1 peer 冲突、官方包间导出对不上）已无法启动，与本次改动无关；stats 接口 106 会话中 20 个读取失败为语料旧损坏会话，UI 已有对应提示
+- 验证：alpha 0.1.6-alpha.2 实机 `dspm web restart` 全链路（同步 → 启动 → 就绪）零错误；`GET /token-usage/stats` 返回 106 会话 / 9530 万 tokens；`dspm doctor` all good；`node --check` 全量通过
+- 状态：已完成
+
+### 2026-09-19 平台 dspm 启动通道默认切 alpha
+
+- 模块：平台
+- 需求：dsh web 后续启动跟随官方 alpha 通道（新特性先行验证，如官方右侧栏：文件树 / 终端 / 内嵌浏览器 / 文档预览已在 0.1.6-alpha.2 落地），同时保留切回 latest 等通道的能力
+- 结果：
+  - `startDshWeb` 启动 spec 由硬编码 `@deepseek-ai/dsh@latest` 改为 `@deepseek-ai/dsh@<channel>`，默认 `alpha`（常量 `DEFAULT_CHANNEL`），新增 `--channel <tag>` 选项覆盖（web start / restart 与 reload --restart 全链路生效，bunx / npx 兜底同通道）
+  - 冗余度核查：官方 0.1.6-alpha.2 已内置 ui-sidebar-files / ui-sidebar-terminal / ui-sidebar-browser / ui-sidebar-documentpreview（md / code / 图片 / PDF / Office 转 PDF / HTML），与 dsh-better-sidebar 六项能力重叠四项；better-sidebar 剩余独有能力为可写编辑器与 Git 面板，暂保留 registry 登记，待官方补齐后再评估下线
+- 验证：`node --check dspm` 通过；README / design.md / AGENTS.md 同步
+- 状态：已完成
+
 ### 2026-09-05 平台 dspm 吸收 dsh web 启动管理 + 去后缀改名
 
 - 模块：平台

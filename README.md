@@ -8,11 +8,10 @@ DeepSeek Harness (DSH) 插件集合仓库，统一命令纳管自有模块与第
 | --- | --- | --- | --- |
 | dsh-token-usage | 自有（仓库根） | 模型用量统计：指标卡、活跃热力图、按天趋势、模型占比 | 设置 → 用量统计 |
 | dsh-time-awareness | 自有（modules/） | 时间感知：每轮对话注入一条带时区的时间读取，让模型感知墙上时钟 | 无 UI，注入会话历史 |
-| dsh-better-sidebar | 第三方（registry 纳管） | VSCode 式工作台：文件树 / 编辑器 / 终端 / Git / 内嵌浏览器 / 文件预览 | 右侧栏 + 底部面板 |
+
+> 原第三方工作台 dsh-better-sidebar 已于 2026-09-19 移除：官方 DSH 0.1.6-alpha 起内置右侧栏（文件树 / 终端 / 内嵌浏览器 / 文件预览），不再纳管
 
 后续新增自有模块落 `modules/<模块名>/`，零配置被 dspm 自动发现；第三方插件 `dspm add <pkg>[@版本]` 一条命令纳管（登记 `third-party.json`）
-
-> dsh-better-sidebar 出处：[omdsh-dev/DSH-better-sidebar](https://github.com/omdsh-dev/DSH-better-sidebar)（MIT），本仓库只维护纳管编排，源码以上游为准
 
 ## 管理命令 dspm
 
@@ -36,7 +35,7 @@ cd dsh-panel
 | `dspm update [target]` | 第三方升级到 npm 最新版并更新 pin |
 | `dspm pin <pkg> <ver>` | 锁定第三方版本并重装 |
 | `dspm doctor` | 体检：断链 / patch 缺失 / bundle 未登记 / 版本错配 / 备份残留 |
-| `dspm web <action>` | dsh web 服务管理：status / start [--no-link] / stop / restart / log |
+| `dspm web <action>` | dsh web 服务管理：status / start [--no-link] [--channel <tag>] / stop / restart / log（启动通道默认 alpha） |
 
 target 为模块名（可省 `dsh-` 前缀），默认 all；运行树 node_modules 根自动探测，探不到用 `--dsh-root <path>`
 
@@ -50,7 +49,7 @@ target 为模块名（可省 `dsh-` 前缀），默认 all；运行树 node_modu
 web profile 无 HMR：
 
 - client 半改动 → 浏览器硬刷新即生效
-- host 半 / patch 行改动 → 需重启 DSH：`dspm reload <target> --restart --yes`（kill 后以 `bunx @deepseek-ai/dsh@latest web` 后台拉起，日志 `~/.dsh/dsh-web.log`；会断开当前所有会话，故必须显式 `--yes`）
+- host 半 / patch 行改动 → 需重启 DSH：`dspm reload <target> --restart --yes`（kill 后以 `bunx @deepseek-ai/dsh@alpha web` 后台拉起，`--channel <tag>` 可换通道，日志 `~/.dsh/dsh-web.log`；会断开当前所有会话，故必须显式 `--yes`）
 
 服务生命周期由 `dspm web` 统一管理（`reload --restart` 复用同一 stop/start）：`start` 默认先幂等同步全部插件再拉起（`--no-link` 跳过），就绪判定为日志出现服务 URL 并回显带 token 地址；`stop` 三段式 SIGTERM(5s) → SIGKILL；pidfile `~/.dsh/dsh-web.pid`、日志 `~/.dsh/dsh-web.log`
 
@@ -82,6 +81,5 @@ docs/             # 设计 / 架构 / 需求迭代 / 参考资料
 
 - dsh-token-usage 依赖契约：`sessionQuery`、`webServer.register`、`settings.section` 槽位；验证版本 DSH 0.1.0-rc.6
 - dsh-time-awareness 依赖契约：`agents` 注册表的 `agent/pre-step` 瀑布；patch 行可选 config（`timeZone` / `refreshIntervalMs` / `everyStep`）；验证版本 DSH 0.1.0-rc.8
-- dsh-better-sidebar 0.18.0 适配 DSH 0.1.0-rc.8，升级前先确认运行树版本（`dspm update` 前同理）
 
 插件市场见 [github.com/topics/dsh-plugin](https://github.com/topics/dsh-plugin)

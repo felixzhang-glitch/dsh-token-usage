@@ -46,10 +46,13 @@ client.js 三视图渲染（时间范围切片，前端不重复聚合）
 
 ```
 真包      ~/.dsh/profiles/web/dsh-token-usage/
-链接 A    ~/.dsh/profiles/node_modules/dsh-token-usage   # client 解析
-链接 B    <运行树>/node_modules/dsh-token-usage           # host 解析
+链接 A    ~/.dsh/profiles/web/node_modules/dsh-token-usage   # -> ../dsh-token-usage，profile 本地解析
+链接 B    <运行树>/node_modules/dsh-token-usage              # 运行树解析（兼容旧通道）
+声明      ~/.dsh/profiles/web/package.json dependencies: link:./<name>
 挂载      ~/.dsh/profiles/web/cordis.patch.yml 一行 insert
 ```
+
+> 0.1.6-alpha 起官方引入 ResolutionRouter（dsh-app-boot）：profile 上下文只解析 profile package.json 声明 + profile 自身 node_modules 里的本地包，旧链接位 `~/.dsh/profiles/node_modules`（profiles 父级）不再生效；dspm 已迁移链接 A 并自动写 `link:` 依赖声明，旧位置链接在安装/卸载时自动摘除
 
 > 已知限制：`dsh` 经 npx/bunx 升级会重建缓存目录导致链接 B 失效，`dspm doctor` 检出、`dspm install <模块>` 修复；web profile 无 HMR，patch 改动必须重启（`dspm reload <模块> --restart --yes`）
 
@@ -111,28 +114,23 @@ patch 行默认无 config 即「每轮一条、进程时区、不节流」，可
 - 注入发生在请求准备期：后续准备失败时读取仍留在历史；每条读取累积至 compaction 遮蔽，append-only 不破坏 KV cache 前缀
 - 验证版本：DSH 0.1.0-rc.8
 
-## 第三方接入：dsh-better-sidebar
+## 第三方接入通道（bundle）
 
-侧边栏工作台不自建，直接接入第三方插件 dsh-better-sidebar（独立仓库 omdsh-dev/DSH-better-sidebar，npm 包形态）
-
-### 接入通道
-
-模块登记在 `third-party.json`（pin 版本 + channel: bundle + 验证过的 DSH 版本），dspm 读取后编排：
+第三方模块登记在 `third-party.json`（pin 版本 + channel: bundle + 验证过的 DSH 版本），dspm 读取后编排；当前 registry 为空。通用流程：
 
 ```
-dspm install dsh-better-sidebar（installBundle）
+dspm install <pkg>（installBundle）
         │ 1. 幂等前置：pnpm-workspace.yaml allowBuilds（官方通道兜底）
         │    + profile package.json trustedDependencies: ["node-pty"]（bun 侧）
-        │ 2. bun add dsh-better-sidebar@<registry pin 版本>（cwd=profile）
+        │ 2. bun add <pkg>@<registry pin 版本>（cwd=profile）
         │ 3. prunePeers：剪除全部 peer 与 @deepseek-ai/*（bun 强制自动装
         │    peer 且无开关，留着与宿主 cordis 双实例必炸）
         │ 4. fixExecBits：恢复 node-pty spawn-helper 可执行位（bun 解包丢 +x）
         │ 5. reconcileBundles：声明 dsh.bundle.patch 才登记进 dsh.profile.bundles
         ▼
 profile package.json：dependencies + dsh.profile.bundles 登记
-        │ profile 启动时 bundle patch 自动挂载（insert id: better-sidebar）
+        │ profile 启动时 bundle patch 自动挂载
         ▼
-右侧栏 + 底部面板：文件树 / CodeMirror 编辑器 / 终端 / Git / 浏览器 / 文件预览
 ```
 
 与官方 `dsh plugin` 通道的差异及原因：官方通道是纯 pnpm 转发（直连 npmjs，分钟级卡死）+ `autoInstallPeers: false` 天然不装 peer；bun 快但强制装 peer 且无开关，故 dspm 装后手动剪除并把官方通道的 `dsh.profile.bundles` reconcile 逻辑（reconcilePlugins）自理。
@@ -140,7 +138,5 @@ profile package.json：dependencies + dsh.profile.bundles 登记
 ### 关键点
 
 - 与自有模块的符号链接 + patch 行通道完全独立：不建链接、不写用户 patch 行；手写挂载行会与 bundle 双挂载（duplicate prefix route 导致启动失败）
-- 卸载走 `dspm uninstall dsh-better-sidebar`（底层 `bun remove` + reconcileBundles 摘除）
-- 升级走 `dspm update dsh-better-sidebar`（npm view 最新版 → 更新 registry pin → 重装）；锁版回滚走 `dspm pin`
-- 版本耦合：0.18.0 适配 DSH 0.1.0-rc.8，升级 better-sidebar 前先确认 DSH 运行树版本
-- 它暴露 `ctx.betterSidebar` 服务（registerTab / registerFileViewer），后续自有模块可扩展侧边栏页面而非自建 UI
+- 卸载走 `dspm uninstall <pkg>`（底层 `bun remove` + reconcileBundles 摘除）；升级走 `dspm update <pkg>`（npm view 最新版 → 更新 registry pin → 重装）；锁版回滚走 `dspm pin`
+- 接入前评估官方内置覆盖度：dsh-better-sidebar 曾以此通道接入（pin 0.18.0，适配 DSH 0.1.0-rc.8），2026-09-19 因官方 0.1.6-alpha 内置右侧栏（ui-sidebar-files / terminal / browser / documentpreview）能力重叠而移除，registry 清空

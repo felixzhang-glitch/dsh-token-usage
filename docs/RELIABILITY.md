@@ -16,7 +16,7 @@
 - 常见故障与处置：
   - `dsh` 经 npx/bunx 升级后链接 B 失效 → `dspm doctor` 检出，`dspm install all` 幂等修复
   - 启动失败（duplicate prefix route）→ 检查是否对 bundle 通道模块手写挂载行（双挂载），删除手写行
-  - 终端 PTY 不可用 → `fixExecBits` 未生效，重跑 `dspm install dsh-better-sidebar`
+  - 终端 PTY 不可用（第三方 bundle 带 node-pty 时）→ `fixExecBits` 未生效，重跑 `dspm install <target>`
   - web 无 HMR：client 半改动硬刷新生效；host 半 / patch 行改动需 `dspm reload <target> --restart --yes`
 - 回滚方式：`dspm uninstall <target>`（patch 行与链接自动还原 `.bak-*` 备份）；第三方版本回滚 `dspm pin <pkg> <旧版本>`
 

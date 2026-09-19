@@ -14,7 +14,8 @@ import { createRequire } from 'node:module'
 const REPO_ROOT = path.dirname(new URL(import.meta.url).pathname) // dspm 位于仓库根
 const DSH_HOME = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
 const PROFILE_DIR = path.join(DSH_HOME, 'profiles', 'web')
-const PROFILES_NM = path.join(DSH_HOME, 'profiles', 'node_modules')
+const PROFILES_NM = path.join(DSH_HOME, 'profiles', 'node_modules') // legacy 链接位（0.1.6-alpha 前），仅用于清理
+const PROFILE_NM = path.join(PROFILE_DIR, 'node_modules') // 链接 A 当前位置：profile 自己的 node_modules
 const PATCH_FILE = path.join(PROFILE_DIR, 'cordis.patch.yml')
 const PROFILE_PKG = path.join(PROFILE_DIR, 'package.json')
 const WS_YML = path.join(PROFILE_DIR, 'pnpm-workspace.yaml')
@@ -121,17 +122,18 @@ function probeRoot(p) {
   return fs.existsSync(path.join(root, '@deepseek-ai/dsh/package.json')) ? root : null
 }
 
-function detectRuntimeRoot() {
+function detectRuntimeRoot(channel) {
   if (detectedRoot !== undefined) return detectedRoot
-  const candidates = []
+  const procCandidates = []
   // 1. 正在运行的 dsh web 进程（最准）
   try {
     const out = sh("ps -axo command= | grep -F 'node_modules/.bin/dsh web' || true")
     for (const line of out.split('\n')) {
       const t = line.trim()
-      if (t) candidates.push(t.split(/\s+/)[1])
+      if (t) procCandidates.push(t.split(/\s+/)[1])
     }
   } catch {}
+  const candidates = []
   // 2. PATH 中的 dsh
   try {
     const bin = sh('command -v dsh').trim()
@@ -154,7 +156,10 @@ function detectRuntimeRoot() {
       candidates.push(path.join(npxDir, d, 'node_modules', '@deepseek-ai/dsh', 'package.json'))
     }
   } catch {}
-  for (const c of candidates) {
+  // bunx 缓存按通道分目录（dsh@alpha / dsh@latest 共存）：优先当前启动通道，避免链接 B 建错树
+  const tag = `dsh@${channel || DEFAULT_CHANNEL}`
+  candidates.sort((a, b) => (b.includes(tag) ? 1 : 0) - (a.includes(tag) ? 1 : 0))
+  for (const c of [...procCandidates, ...candidates]) {
     const root = probeRoot(c)
     if (root) {
       detectedRoot = root
@@ -172,7 +177,7 @@ function requireRuntimeRoot(flags) {
     }
     return flags.dshRoot
   }
-  const root = detectRuntimeRoot()
+  const root = detectRuntimeRoot(flags.channel)
   if (!root) {
     fail('cannot auto-detect the DSH runtime tree; re-run with --dsh-root <node_modules root containing @deepseek-ai/dsh>')
   }
@@ -286,6 +291,28 @@ function removeEntry(p, { allowRealDir = false } = {}) {
 
 // ---------- 自有模块通道 ----------
 
+// 0.1.6-alpha 起官方解析路由（dsh-app-boot ResolutionRouter）只认 profile package.json
+// 声明且落在 profile 自己 node_modules 里的本地包；profiles/node_modules 父级链接不再被解析
+function declareOwnDep(name) {
+  if (!fs.existsSync(PROFILE_PKG)) fail(`${PROFILE_PKG} not found (initialize the web profile first)`)
+  const pkg = JSON.parse(fs.readFileSync(PROFILE_PKG, 'utf8'))
+  const spec = `link:./${name}`
+  const deps = pkg.dependencies || {}
+  if (deps[name] === spec) return
+  pkg.dependencies = { ...deps, [name]: spec }
+  fs.writeFileSync(PROFILE_PKG, JSON.stringify(pkg, null, 2) + '\n')
+}
+
+function undeclareOwnDep(name) {
+  if (!fs.existsSync(PROFILE_PKG)) return
+  const pkg = JSON.parse(fs.readFileSync(PROFILE_PKG, 'utf8'))
+  if (!pkg.dependencies || !(name in pkg.dependencies)) return
+  if (!String(pkg.dependencies[name]).startsWith('link:')) return // 不摘非 dspm 写的声明
+  delete pkg.dependencies[name]
+  if (Object.keys(pkg.dependencies).length === 0) delete pkg.dependencies
+  fs.writeFileSync(PROFILE_PKG, JSON.stringify(pkg, null, 2) + '\n')
+}
+
 function installOwn(mod, root) {
   step(`[${mod.name}] installing package to ${PROFILE_DIR}/${mod.name}`)
   if (!fs.existsSync(path.join(mod.src, 'package.json'))) fail(`package.json not found under: ${mod.src}`)
@@ -299,10 +326,12 @@ function installOwn(mod, root) {
   }
 
   step(`[${mod.name}] linking into profile module tree`)
-  fs.mkdirSync(PROFILES_NM, { recursive: true })
-  const linkA = path.join(PROFILES_NM, mod.name)
+  removeEntry(path.join(PROFILES_NM, mod.name)) // legacy 链接位清理
+  fs.mkdirSync(PROFILE_NM, { recursive: true })
+  const linkA = path.join(PROFILE_NM, mod.name)
   removeEntry(linkA)
-  fs.symlinkSync(path.relative(PROFILES_NM, dest), linkA)
+  fs.symlinkSync(path.relative(PROFILE_NM, dest), linkA)
+  declareOwnDep(mod.name)
   const linkB = path.join(root, mod.name)
   removeEntry(linkB)
   fs.symlinkSync(dest, linkB)
@@ -315,7 +344,9 @@ function uninstallOwn(mod, flags = {}) {
   step(`[${mod.name}] removing mount row from ${PATCH_FILE}`)
   removePatchRow(pluginId(mod.name))
   step(`[${mod.name}] removing links and package dir`)
-  removeEntry(path.join(PROFILES_NM, mod.name))
+  removeEntry(path.join(PROFILE_NM, mod.name))
+  removeEntry(path.join(PROFILES_NM, mod.name)) // legacy 链接位清理
+  undeclareOwnDep(mod.name)
   const root = flags.dshRoot || detectRuntimeRoot()
   if (root) {
     removeEntry(path.join(root, mod.name))
@@ -476,13 +507,17 @@ function ownStatus(mod) {
   const dest = path.join(PROFILE_DIR, mod.name)
   const files = fs.existsSync(path.join(dest, 'package.json'))
   if (!files) return { installed: false }
-  const linkA = linkState(path.join(PROFILES_NM, mod.name), dest)
+  const linkA = linkState(path.join(PROFILE_NM, mod.name), dest)
+  const declared = profilePkg().dependencies?.[mod.name] === `link:./${mod.name}`
+  const legacyLink = linkState(path.join(PROFILES_NM, mod.name), dest)
   const root = detectRuntimeRoot()
   const linkB = root ? linkState(path.join(root, mod.name), dest) : 'unknown'
   const patch = patchHasRow(pluginId(mod.name))
-  const ok = linkA === 'ok' && patch && (linkB === 'ok' || linkB === 'unknown')
+  const ok = linkA === 'ok' && declared && patch && (linkB === 'ok' || linkB === 'unknown')
   const parts = []
   if (linkA !== 'ok') parts.push(`链接A ${linkA}`)
+  if (!declared) parts.push('profile 依赖声明缺失')
+  if (legacyLink !== 'missing') parts.push('legacy 链接残留(profiles/node_modules)')
   if (linkB !== 'ok' && linkB !== 'unknown') parts.push(`链接B ${linkB}`)
   if (linkB === 'unknown') parts.push('链接B 未探测(运行树未知)')
   if (!patch) parts.push('patch 行缺失')
@@ -589,11 +624,16 @@ function stopDshWeb() {
 }
 
 // 就绪判定：轮询日志新增内容里的服务 URL 行（bunx 首次解依赖可能慢，上限 30s）
-function startDshWeb() {
+// 启动通道默认 alpha（官方新特性先行验证），--channel <tag> 可切回 latest 或任意 dist-tag
+const DEFAULT_CHANNEL = 'alpha'
+
+function startDshWeb(flags = {}) {
   if (!hasCmd('bunx') && !hasCmd('npx')) fail('bunx / npx 都不可用，无法拉起 dsh web')
+  const channel = flags.channel || DEFAULT_CHANNEL
+  const spec = `@deepseek-ai/dsh@${channel}`
   const [bin, args] = hasCmd('bunx')
-    ? ['bunx', ['@deepseek-ai/dsh@latest', 'web', '--no-open']]
-    : ['npx', ['-y', '@deepseek-ai/dsh', 'web', '--no-open']]
+    ? ['bunx', [spec, 'web', '--no-open']]
+    : ['npx', ['-y', spec, 'web', '--no-open']]
   const offset = fs.existsSync(WEB_LOG) ? fs.statSync(WEB_LOG).size : 0
   const logFd = fs.openSync(WEB_LOG, 'a')
   const child = cp.spawn(bin, args, { detached: true, stdio: ['ignore', logFd, logFd] })
@@ -627,8 +667,8 @@ function restartDsh(flags) {
     console.log('    --no-start given, not relaunching')
     return
   }
-  step('starting dsh web (bunx @deepseek-ai/dsh@latest)')
-  if (!startDshWeb()) fail('dsh web 启动失败')
+  step(`starting dsh web (${flags.channel || DEFAULT_CHANNEL} 通道)`)
+  if (!startDshWeb(flags)) fail('dsh web 启动失败')
 }
 
 // ---------- 命令 ----------
@@ -659,6 +699,7 @@ const HELP = {
   --prune-backups           配合 uninstall：清理 profile 里的 .bak-* 备份残留；不传 target 时仅清理不卸载
   --note "<text>"           配合 add：写入 registry 备注
   --no-link                 配合 web start / restart：跳过启动前的插件同步
+  --channel <tag>           配合 web start / restart 与 reload --restart：dsh 启动通道 dist-tag（默认 alpha，可 latest / next 等）
   --lines <n>               配合 web log：tail 行数（默认 50）
   --yes                     确认危险操作
   -h, --help                显示帮助（dspm <command> -h 看单命令用法）
@@ -677,7 +718,7 @@ const HELP = {
   update: 'dspm update [target|all]\n  对第三方模块 npm view 最新版，与 pin 不同则更新 registry 并重装；默认全部第三方',
   pin: 'dspm pin <pkg> <version>\n  锁定 registry 中第三方模块的版本并重装',
   doctor: 'dspm doctor\n  全量体检并给出修复建议；有问题时退出码为 1',
-  web: 'dspm web <status|start|stop|restart|log>\n  dsh web 服务管理；pidfile ~/.dsh/dsh-web.pid，日志 ~/.dsh/dsh-web.log\n  status: running 退出码 0 / stopped 退出码 1；start / restart: 默认先同步全部插件（--no-link 跳过）再拉起，日志出现服务 URL 即就绪并回显地址；stop: SIGTERM 5s 后 SIGKILL 兜底；log: 看日志尾部（--lines <n>，默认 50）',
+  web: 'dspm web <status|start|stop|restart|log> [--channel <tag>]\n  dsh web 服务管理；pidfile ~/.dsh/dsh-web.pid，日志 ~/.dsh/dsh-web.log\n  status: running 退出码 0 / stopped 退出码 1；start / restart: 默认先同步全部插件（--no-link 跳过）再以 alpha 通道拉起（--channel 换 dist-tag），日志出现服务 URL 即就绪并回显地址；stop: SIGTERM 5s 后 SIGKILL 兜底；log: 看日志尾部（--lines <n>，默认 50）',
 }
 
 // CJK 字符按 2 列宽对齐
@@ -877,7 +918,7 @@ function cmdWeb(args, flags) {
       }
       if (!flags.noLink) cmdInstall(['all'], flags, { quietDone: true })
       step('starting dsh web')
-      if (!startDshWeb()) process.exit(1)
+      if (!startDshWeb(flags)) process.exit(1)
       return
     case 'stop':
       console.log(stopDshWeb() ? 'stopped' : 'not running')
@@ -886,7 +927,7 @@ function cmdWeb(args, flags) {
       stopDshWeb()
       if (!flags.noLink) cmdInstall(['all'], flags, { quietDone: true })
       step('starting dsh web')
-      if (!startDshWeb()) process.exit(1)
+      if (!startDshWeb(flags)) process.exit(1)
       return
     case 'log': {
       if (!fs.existsSync(WEB_LOG)) fail(`${WEB_LOG} 不存在（服务从未启动过？）`)
@@ -914,6 +955,11 @@ function main() {
     else if (a === '--yes') flags.yes = true
     else if (a === '--note') flags.note = argv[++i]
     else if (a === '--no-link') flags.noLink = true
+    else if (a === '--channel') {
+      const tag = argv[++i]
+      if (!tag || tag.startsWith('-')) fail('--channel 需要一个 dist-tag（如 alpha / latest / next）')
+      flags.channel = tag
+    }
     else if (a === '--lines') {
       const n = parseInt(argv[++i], 10)
       if (!Number.isInteger(n) || n <= 0) fail('--lines 需要一个正整数')

@@ -32,5 +32,4 @@
 
 - token-usage UI：三视图渲染、时间范围切换、中英 locale、主题适配、空数据态、`?refresh=1` 强刷
 - time-awareness：发起一轮对话后检查会话历史中出现 sourced 时间读取消息
-- better-sidebar：右侧栏文件树 / 编辑器 / 终端（PTY）/ Git / 文件预览逐项点开
 - `dspm list` / `doctor` 输出与实机安装状态一致

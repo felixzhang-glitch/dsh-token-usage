@@ -21,7 +21,7 @@
 ## 组件与页面规范
 
 - 写法：无 JSX，只用 `react.createElement`
-- 槽位：经 `ctx.slots.inject(...)` 注册（如 `settings.section`），槽位未声明时自动等待；未来如需独立面板优先扩展 better-sidebar 的 `ctx.betterSidebar`（registerTab / registerFileViewer）而非自建容器
+- 槽位：经 `ctx.slots.inject(...)` 注册（如 `settings.section`），槽位未声明时自动等待；官方 0.1.6-alpha 起右侧栏提供 `ctx.sidebarRightTabs` 页签注册位，需要独立面板时优先查该扩展位而非自建容器
 - 状态管理：组件内状态机（loading / error / ready + 空数据态）；卸载竞态防护——fetch 挂 `AbortController`，卸载/重复加载时 abort，AbortError 静默
 - 请求层：静态插件没有 `host.call`，client 取 host 数据一律 fetch host 注册的 HTTP 路由；前端不重复聚合，只做时间范围切片与渲染
 - 文案：中英双语，经 `ctx.get('locale')` 订阅切换，禁止硬编码文案

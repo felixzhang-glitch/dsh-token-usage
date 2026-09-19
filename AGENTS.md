@@ -4,7 +4,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 ## 核心指令
 
-- 本仓库是 DeepSeek Harness (DSH) 插件集合仓库 dsh-panel 的开发迭代仓库；自有模块 dsh-token-usage 在仓库根（历史原因），新模块落 `modules/`（现有 dsh-time-awareness），侧边栏工作台由第三方 dsh-better-sidebar 接入，后续会持续新增模块
+- 本仓库是 DeepSeek Harness (DSH) 插件集合仓库 dsh-panel 的开发迭代仓库；自有模块 dsh-token-usage 在仓库根（历史原因），新模块落 `modules/`（现有 dsh-time-awareness），后续会持续新增模块
 - 每次需求迭代必须追加更新 `docs/requirements.md`（时间倒序）
 - 设计/架构变更需同步更新 `docs/design.md` / `docs/architecture.md`
 - 新模块接入需同步更新本文件代码地图与 docs 文档中的模块清单
@@ -16,14 +16,8 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 | 路径 | 职责 |
 | --- | --- |
 | `docs/` | 设计、架构、需求迭代文档与参考资料 |
-| `dspm`（仓库根，无后缀） | 平台统一命令：`dspm <list\|install\|uninstall\|reload\|add\|update\|pin\|doctor\|web> [target]`，支持 `-h`；自有模块走符号链接 + patch 行，第三方走 bun 直装 + 手动 reconcile bundles；`web` 管 dsh web 服务生命周期（status/start/stop/restart/log，pidfile 与日志在 DSH_HOME） |
-| `third-party.json` | 第三方模块 registry（name / spec pin / channel / note），`dspm add` 写入，`install/reload/update/pin` 读取 |
-
-### 第三方模块 dsh-better-sidebar（VSCode 式右侧栏工作台）
-
-- 源码不在本仓库（独立仓库 DSH-better-sidebar，npm 包形态接入），本仓库只在 `third-party.json` 登记（pin 0.18.0）+ dspm 编排
-- 安装走 dspm bun 通道（`bun add`，弃用官方 `dsh plugin` pnpm 转发——慢且不稳）：装后 `prunePeers` 剪除全部 `@deepseek-ai/*`/react/cordis（bun 强制自动装 peer，与宿主双实例必炸）、`fixExecBits` 恢复 node-pty `spawn-helper` 可执行位、`reconcileBundles` 登记进 `dsh.profile.bundles`；不建符号链接、不写 patch 行（手写挂载行会与 bundle 双挂载导致启动失败）
-- 文件树 / 编辑器 / 终端 / Git / 内嵌浏览器 / 文件预览（md / html / pdf / Office / 图片）由它提供，不再自建
+| `dspm`（仓库根，无后缀） | 平台统一命令：`dspm <list\|install\|uninstall\|reload\|add\|update\|pin\|doctor\|web> [target]`，支持 `-h`；自有模块走符号链接 + patch 行，第三方走 bun 直装 + 手动 reconcile bundles；`web` 管 dsh web 服务生命周期（status/start/stop/restart/log，pidfile 与日志在 DSH_HOME，启动通道默认 `@alpha`，`--channel <tag>` 可换） |
+| `third-party.json` | 第三方模块 registry（name / spec pin / channel / note），`dspm add` 写入，`install/reload/update/pin` 读取；当前为空（dsh-better-sidebar 已于 2026-09-19 移除：官方 0.1.6-alpha 内置右侧栏文件树/终端/浏览器/预览，能力重叠） |
 
 ### 模块 dsh-token-usage（用量统计，设置 → 用量统计）
 

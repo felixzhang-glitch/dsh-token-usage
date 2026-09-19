@@ -4,7 +4,7 @@
 
 - 密钥、密码、token 一律不进代码库；本仓库为本地插件仓库，不产生也不存储凭据
 - 第三方模块纳管必须版本锁定：`third-party.json` 记录 pin 版本与验证过的 DSH 版本（`dshVerified`），升级走 `dspm update` 显式确认，不装 `@latest` 浮动版本
-- `dspm add <pkg>` 前人工确认包来源与上游仓库（当前唯一第三方：omdsh-dev/DSH-better-sidebar，MIT）
+- `dspm add <pkg>` 前人工确认包来源与上游仓库（当前 registry 为空，无在管第三方）
 - 所有模块只读写 DSH 契约暴露的服务与会话数据，不越权访问 `~/.dsh` 之外的用户文件
 
 ## 认证与授权

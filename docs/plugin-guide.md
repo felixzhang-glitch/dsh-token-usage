@@ -150,14 +150,17 @@ window.__ModuleLoader__.load({
 
 裸包名 `dsh-token-usage` 要在两个互不相通的解析上下文里都能命中
 
-1. client 侧：client-modules 用 `createRequire(ctx.baseUrl)` 解析 `<name>/package.json`，`baseUrl` 是 profile 目录 → 向上查找 `node_modules`，命中 `~/.dsh/profiles/node_modules/`
+1. client 侧：client-modules 用 `createRequire(ctx.baseUrl)` 解析 `<name>/package.json`，`baseUrl` 是 profile 目录 → 命中 profile 自己的 `node_modules/`
 2. host 侧：Loader 对裸名执行 `await import(name)`，解析上下文是运行树内的 loader 包 → 命中运行树（npx 缓存或安装目录）的 `node_modules/`
+
+> 0.1.6-alpha 起官方引入 ResolutionRouter：profile 上下文只认 profile package.json 声明 + profile 自身 node_modules 内的本地包，profiles 父级 `node_modules` 不再参与解析；因此链接 A 必须落在 `~/.dsh/profiles/web/node_modules/` 且 package.json 里要有 `link:./<name>` 依赖声明
 
 因此标准布局
 
 ```
 真包      ~/.dsh/profiles/web/dsh-token-usage/          # 持久、用户自有
-链接 A    ~/.dsh/profiles/node_modules/dsh-token-usage  # -> ../web/dsh-token-usage
+链接 A    ~/.dsh/profiles/web/node_modules/dsh-token-usage  # -> ../dsh-token-usage
+声明      ~/.dsh/profiles/web/package.json dependencies: link:./dsh-token-usage
 链接 B    <运行树>/node_modules/dsh-token-usage          # -> 真包绝对路径
 ```
 
@@ -169,7 +172,7 @@ window.__ModuleLoader__.load({
 
 不要猜 API，按此顺序取证
 
-1. 包类型声明：`~/.dsh/profiles/node_modules/@deepseek-ai/<包>/lib/types/*.d.ts`
+1. 包类型声明：`<运行树>/node_modules/@deepseek-ai/<包>/lib/types/*.d.ts`
 2. 编译产物：同包 `lib/*.js` 里的真实行为（类型只说形状，产物说语义）
 3. 运行时 inspect（动态插件可用）：`cordis_inspect_list/query`，本会话模型通道对 oneOf 参数有序列化缺陷，静态开发以 1、2 为准
 
@@ -251,8 +254,8 @@ tar czf dsh-token-usage-dist.tar.gz dist/   # 权限先 chmod 755/644
 ### dspm 安装自有模块的四步
 
 1. 复制包到目标 `~/.dsh/profiles/web/dsh-token-usage/`
-2. 建链接 A（profile 树）
-3. 自动探测运行树建链接 B：优先正在运行的 dsh web 进程反查 `node_modules` 根，回退 `command -v dsh` realpath、bunx 临时缓存、`~/.npm/_npx`；探测失败接受显式传参 `--dsh-root <node_modules 根>`
+2. 建链接 A（profile 自己的 node_modules）并在 profile package.json 写 `link:./<name>` 依赖声明（0.1.6-alpha 起官方解析路由的硬性要求）
+3. 自动探测运行树建链接 B：优先正在运行的 dsh web 进程反查 `node_modules` 根，回退 `command -v dsh` realpath、bunx 临时缓存（按启动通道优先匹配 `dsh@<channel>` 目录）、`~/.npm/_npx`；探测失败接受显式传参 `--dsh-root <node_modules 根>`
 4. 幂等追加 patch 行：空文件直接写、已有行跳过、其他条目保留追加；写入前若运行树内可达 js-yaml 则做 YAML 校验
 
 ### 目标机要求
@@ -276,6 +279,7 @@ tar czf dsh-token-usage-dist.tar.gz dist/   # 权限先 chmod 755/644
 | --- | --- |
 | `~/.dsh/profiles/web/cordis.patch.yml` | 用户挂载层（本插件唯一配置入口） |
 | `~/.dsh/profiles/web/dsh-token-usage/` | 插件真包 |
-| `~/.dsh/profiles/node_modules/dsh-token-usage` | 链接 A，client 解析 |
+| `~/.dsh/profiles/web/node_modules/dsh-token-usage` | 链接 A，profile 本地解析 |
+| `~/.dsh/profiles/web/package.json` | profile 清单，`link:./dsh-token-usage` 依赖声明 |
 | `<运行树>/node_modules/dsh-token-usage` | 链接 B，host 解析 |
 | `~/.dsh/sessions/**/session.jsonl.zstd` | 数据源（只读） |
