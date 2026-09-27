@@ -1,44 +1,33 @@
-# dsh-panel 设计文档
+# dsh-token-usage 设计文档
 
 ## 定位
 
-dsh-panel 是 DeepSeek Harness (DSH) 的静态插件集合仓库，一个模块对应一个可独立安装/卸载的插件包，随 DSH 启动持久加载。设计基线与 `plugin-guide.md` 描述的 DSH 静态插件模型完全一致，本文只记录平台级决策，实现细节指回 `plugin-guide.md`
+DeepSeek Harness (DSH) 的 token 用量统计静态插件（自用，仅 macOS）：一个 npm 风格包同时承载 host 半与 client 半，经官方组合包通道安装，随 DSH 启动持久加载。设计基线与 `plugin-guide.md` 描述的 DSH 静态插件模型完全一致，本文只记录插件级决策，实现细节指回 `plugin-guide.md`
 
-> 适用对象：DSH 0.1.0-rc 系列，`dsh web` 部署
+> 适用对象：DSH 0.1.0-rc 系列桌面版与 web（验证 0.1.7-rc.2 / 0.1.6-alpha.2）
 
 ## 模块清单
 
 | 模块 | 功能 | 挂载位置 | 状态 |
 | --- | --- | --- | --- |
-| dsh-token-usage | 模型用量统计（指标卡、热力图、按天趋势、模型用量） | 设置 → 用量统计 | 已发布 v0.2.3 |
-| dsh-time-awareness | 时间感知：每轮对话注入一条带时区的时间读取（时间戳、浏览器时区策略、耗时） | 无 UI，host-only，注入会话历史 | 已发布 v0.1.0 |
+| dsh-token-usage | 模型用量统计（指标卡、热力图、按天趋势、模型用量） | 设置 → 用量统计 | 已发布 v0.3.0 |
 
-> dsh-better-sidebar（第三方工作台）已于 2026-09-19 移除：官方 0.1.6-alpha 内置右侧栏文件树 / 终端 / 内嵌浏览器 / 文件预览，能力重叠四项以上
+> 前身 dsh-panel 为插件集合仓库：dsh-time-awareness（时间感知）模块与 dspm 统一管理命令已于 2026-09-27 随「桌面版接入」裁剪移除；第三方 dsh-better-sidebar 已于 2026-09-19 因官方内置右侧栏移除。历史沿革见 `docs/requirements.md`
 
 ## 通用设计原则
 
-所有模块共同遵守，与 DSH 插件契约对齐：
-
-- 静态插件形态：npm 风格包 + `cordis.patch.yml` 一行挂载，不做动态插件（无跨重启保留能力）
+- 静态插件形态：npm 风格包 + 组合包声明（`dsh.bundle.patch`），不做动态插件（无跨重启保留能力）
 - Host/Client 双端分工：host 半提供数据（注册 HTTP 路由），client 半只做展示（fetch 取数）；静态插件没有 `host.call`，跨端通信一律走 HTTP
 - 副作用可逆：host 一切注册/订阅必须包在 `ctx.effect` 内并返回 disposer；client 样式随插件生命周期进出
-- 依赖显式声明：host 用 `inject` 列硬依赖服务，client 在 `package.json` 的 `dsh.client.inject` 列运行时/槽位包
+- 依赖显式声明：host 用 `inject` 列硬依赖服务，client 在 `package.json` 的 `dsh.client.inject` 列运行时/槽位包，`peerDependencies` 声明宿主契约
 - 主题与 locale 随宿主：样式只用 `--dsw-*` token，文案随 locale 中英切换，不自造色值与硬编码文案
-- 零重依赖倾向：能用 DOM/SVG/CSS 表达的可视化不引图表库
+- 零重依赖倾向：能用 DOM/SVG/CSS 表达的可视化不引图表库；`files` 白名单把分发面收敛到 lib / 挂载 patch / README
 
-## 模块边界约定
+## 分发：官方组合包通道
 
-- 自有新模块落 `modules/<模块名>/` 子目录（dsh-token-usage 为历史原因位于仓库根），符号链接 + patch 行通道安装
-- 成熟的第三方能力优先以 npm 包 + bundle 通道接入，不重复造轮子；安装由 dspm 以 bun 直装（快且稳，替代官方 `dsh plugin` 的 pnpm 转发）+ 装后剪除 peer 防双实例；bundle 通道与手动 patch 行互斥，禁止双挂载；接入前须先核对官方是否已内置同能力（dsh-better-sidebar 即因官方右侧栏落地而移除）
-- 模块间不共享运行时状态；如需公共能力，先抽平台层再引用
-- 每个模块的依赖契约（服务、槽位、token、验证版本）在其文档中显式列出
-
-## 分发层：dspm 统一命令
-
-- 单入口 `dspm`（仓库根，无后缀，node，零三方依赖），子命令 `list / install / uninstall / reload / add / update / pin / doctor / web`，全局与命令级 `-h`；旧 install.sh / uninstall.sh 已删除
-- target 统一自动发现：仓库根 package.json + `modules/*/package.json` + `third-party.json` registry，模块名可省 `dsh-` 前缀，不再有硬编码 case
-- 第三方纳管即 registry 登记：`dspm add <pkg>[@版本]` 校验存在性后 pin 版本写入 `third-party.json`（name / spec / channel / note / dshVerified），再走 bun 通道安装；`update` 升 pin、`pin` 锁版
-- reload 语义：web 无 HMR，reload = 重同步文件（自有重拷 / 第三方按 pin 重装）+ 生效提示；`--restart --yes` 才重启 DSH（kill 后 `bunx @deepseek-ai/dsh@<channel> web` 后台拉起，会断开所有会话）
-- dsh web 服务生命周期：`dspm web <status|start|stop|restart|log>`（pidfile / 日志在 DSH_HOME），start/restart 默认先幂等同步全部插件（`--no-link` 跳过）再拉起；启动通道默认 `alpha` dist-tag（`--channel <tag>` 可切 latest 等），就绪判定为健康探测（日志出现服务 URL 即就绪并回显）；与 `reload --restart` 共用同一 stop/start
-- doctor 收编日常体检：链接 A/B 断链（npx/bunx 升级后链接 B 失效）、patch 行缺失、bundle 未登记、版本错配、`.bak-*` 备份残留（`dspm uninstall --prune-backups` 仅清理不卸载）
-- 运行树探测顺序：正在运行的 dsh web 进程 → PATH dsh → bunx 临时缓存 → npx 缓存；沙盒演练须显式 `--dsh-root` 避免误触真机运行树
+- 包形态：`dsh.bundle.patch` 声明指向包内 `cordis.patch.yml` 挂载行；`peerDependencies`（`@deepseek-ai/cordis`、`@deepseek-ai/dsh-session-query`、`@deepseek-ai/dsh-host-webserver` 用 `*`，`react ^18`）；`files: ["lib", "cordis.patch.yml", "README.md"]`
+- 安装入口：DSH 桌面版/web 插件页「添加插件」（spec：本地绝对路径 / Git 仓库地址 / npm 包名），或 `dsh plugin --profile <p> add <spec>`；底层 pnpm 装入 profile 目录并登记 `dsh.profile.bundles`，包内挂载行自动生效，失败自动恢复 manifest 与 lockfile
+- 通道地址：GitHub `https://github.com/felixzhang-glitch/dsh-panel`（远端快照，更新需卸载重装）；本地路径（落 `link:` 活链接，改码即 profile 内生效）；不发布 npm（包名被第三方同名包 Tastelessor/dsh-usage-stats 占用）
+- 安装门与 peer：`peerDependencies` 中 `@deepseek-ai/dsh*` 范围被官方 semver 校验（`*` 永通过，桌面升级不断加载）；profile 层 `autoInstallPeers: false`（官方初始化），声明 peer 不会被自动安装，无宿主双实例
+- 重启生效：desktop profile 未启用 `patchReload: live`，装/卸后需重启 DSH；web profile 有 live 重载
+- 旧通道废弃：dspm 符号链接双链路（链接 A/B + `link:` 依赖声明）不再使用；手写挂载行与 bundle 双挂载会导致启动失败，禁止混用

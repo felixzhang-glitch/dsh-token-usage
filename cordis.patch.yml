@@ -1,0 +1,5 @@
+# dsh-token-usage 组合包 patch：随 dsh.profile.bundles 登记自动挂载（host 半 + client 半）
+# 卸载走 DSH 插件页（或 dsh plugin remove），无需手改任何 profile 文件
+- insert:
+    - id: token-usage
+      name: dsh-token-usage

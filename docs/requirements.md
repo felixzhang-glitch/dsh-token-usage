@@ -8,6 +8,20 @@
 
 ## 记录
 
+### 2026-09-27 桌面版接入：仓库裁剪为纯 dsh-token-usage + 官方组合包分发
+
+- 模块：平台 + dsh-token-usage
+- 需求：接入 DeepSeek Harness 桌面版（0.1.7-rc.2，profile desktop）内置「添加插件」，只保留 token 统计能力；不发布 npm（npm 上 `dsh-token-usage` 已被第三方同名包 Tastelessor/dsh-usage-stats 占用，对话框输裸包名装到的是别人的插件）
+- 结果：
+  - 仓库彻底裁剪：删除 dspm、third-party.json、modules/dsh-time-awareness，仓库根即 dsh-token-usage 单插件包；web profile 旧安装为 profile 内自包含副本，不受仓库裁剪影响
+  - token-usage v0.3.0 组合包化：package.json 新增 `dsh.bundle.patch`（./cordis.patch.yml）+ `files` 白名单（lib / cordis.patch.yml / README.md）+ `peerDependencies`（@deepseek-ai/cordis、dsh-session-query、dsh-host-webserver 用 `*`——安装门永通过且不会双实例，react ^18）+ repository 字段；新增根 `cordis.patch.yml` 挂载行（insert token-usage → dsh-token-usage）
+  - `dsh.client.inject` 由 [@deepseek-ai/dsh-client-runtime, @deepseek-ai/dsh-client-ui-settings] 收敛为 [@deepseek-ai/dsh-client-ui-settings]：dsh-client-runtime 包在 0.1.7-rc.2 运行时已不存在，且 0.1.7 官方包 inject 均为包名列表
+  - 分发通道切换为官方 plugin-manager 组合包通道（桌面版插件页 / `dsh plugin --profile <p> add <spec>`，spec 支持本地绝对路径 / Git 地址 / npm 包名；pnpm 装入 profile + dsh.profile.bundles 登记 + 包内挂载行自动生效，失败自动回滚 manifest/lockfile）；dspm 符号链接双链路通道废弃
+  - 契约核对（0.1.7-rc.2 实读运行时）：sessionQuery / webServer 服务、settings.section 槽位、ModuleLoader roster id（= 包名）全部健在；桌面版 runtime node 24.18.1 / pnpm 11.7.0
+  - 文档全量同步：README / AGENTS / design / architecture / PRODUCT / plugin-guide / TEST / SECURITY / RELIABILITY / FRONTEND / QUALITY_SCORE / CHANGES / reference（新增 dsh-plugin-manager.md 与 deepseek-ai-dsh.md 更新，删除过时 bun.md）
+- 验证：`node --check` 双文件通过；`pnpm pack --dry-run` 白名单核对（仅 lib/ / cordis.patch.yml / README.md / package.json / LICENSE）；沙盒假 profile（package.json + pnpm-workspace.yaml 骨架）`pnpm add <仓库绝对路径>` 演练通过，落 `link:` 活链接；启动路径同款函数实读复演——`loadOverlayPatches + composeEntries`（dsh-app-boot 0.1.7-rc.2）把挂载 patch 组合出 `{id: token-usage, name: dsh-token-usage}` 行，`evaluatePluginCompatibility` 对本包 manifest 判 PASS；js-yaml（运行时同款）解析通过；桌面版插件页实机安装（本地目录 `/Users/yunhao/data/github/dsh-panel`）后重启验收
+- 状态：已完成
+
 ### 2026-09-19 跟进上游 0.1.6-alpha：移除 better-sidebar + 自有模块链接迁移 + token-usage v0.2.3
 
 - 模块：平台 + dsh-token-usage

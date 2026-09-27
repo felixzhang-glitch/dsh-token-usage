@@ -1,14 +1,11 @@
-# dsh-panel 架构文档
+# dsh-token-usage 架构文档
 
 ## 仓库分层
 
 | 层 | 内容 | 说明 |
 | --- | --- | --- |
-| 平台文档层 | `docs/` | 设计、架构、需求迭代记录与参考资料 |
-| 模块代码层 | 仓库根（dsh-token-usage 包，历史原因）+ `modules/<模块名>/`（新模块） | 一个模块一个插件包，含 `lib/`、`package.json` |
-| 分发层 | `dspm`（仓库根）+ `third-party.json` | 平台统一命令 dspm（list/install/uninstall/reload/add/update/pin/doctor/web）；自有模块走符号链接 + patch 行，第三方登记 registry 后走 bun 直装 + 手动 reconcile bundles；web 管 dsh web 服务生命周期 |
-
-> 自有新模块接入时在本文件追加「模块架构」小节，并在 `design.md` 模块清单登记
+| 文档层 | `docs/` | 设计、架构、需求迭代记录与参考资料 |
+| 插件代码层 | 仓库根（`lib/` + `cordis.patch.yml` + `package.json`） | 单插件包，host 半 + client 半一体分发 |
 
 ## 模块架构：dsh-token-usage
 
@@ -42,101 +39,25 @@ client.js 三视图渲染（时间范围切片，前端不重复聚合）
 - 样式经 `ctx.effect` 注入 `<style>`，只用 `--dsw-*` token；locale 经 `ctx.get('locale')` 订阅切换
 - 组件状态机：loading/error/ready + 空数据态；图表零依赖（div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图）
 
-### 部署拓扑
+### 部署拓扑（官方组合包通道）
 
 ```
-真包      ~/.dsh/profiles/web/dsh-token-usage/
-链接 A    ~/.dsh/profiles/web/node_modules/dsh-token-usage   # -> ../dsh-token-usage，profile 本地解析
-链接 B    <运行树>/node_modules/dsh-token-usage              # 运行树解析（兼容旧通道）
-声明      ~/.dsh/profiles/web/package.json dependencies: link:./<name>
-挂载      ~/.dsh/profiles/web/cordis.patch.yml 一行 insert
+profile  ~/.dsh/profiles/<profile>/
+  ├── node_modules/dsh-token-usage    # pnpm 装入（本地路径通道为 link: 活链接）
+  ├── package.json                    # dependencies 写入 + dsh.profile.bundles 登记
+  ├── pnpm-lock.yaml                  # 安装时生成
+  └── pnpm-workspace.yaml             # 官方初始化：nodeLinker hoisted + autoInstallPeers false
+挂载    包内 cordis.patch.yml（dsh.bundle.patch 声明，insert token-usage → dsh-token-usage）
 ```
 
-> 0.1.6-alpha 起官方引入 ResolutionRouter（dsh-app-boot）：profile 上下文只解析 profile package.json 声明 + profile 自身 node_modules 里的本地包，旧链接位 `~/.dsh/profiles/node_modules`（profiles 父级）不再生效；dspm 已迁移链接 A 并自动写 `link:` 依赖声明，旧位置链接在安装/卸载时自动摘除
-
-> 已知限制：`dsh` 经 npx/bunx 升级会重建缓存目录导致链接 B 失效，`dspm doctor` 检出、`dspm install <模块>` 修复；web profile 无 HMR，patch 改动必须重启（`dspm reload <模块> --restart --yes`）
+- 模块解析双锚点（dsh-app-boot ResolutionRouter）：bundle 名先解析自 dsh 安装树，再解析自 profile 目录，profile `node_modules` 内的 pnpm 条目优先——host 半 `import('dsh-token-usage')` 与 client 半 `require.resolve('<name>/package.json')` 都命中 profile `node_modules`，无需任何符号链接
+- 安装/卸载由官方 plugin-manager（dsh CLI / 桌面版插件页 / agent 工具共用引擎）编排：inspect 预检（读包 `dsh.bundle` 声明，非组合包拒绝）→ pnpm add → `dsh.profile.bundles` 登记；失败/取消自动恢复 `package.json` 与 lockfile 快照
+- 本地路径通道落 `link:` 依赖：仓库改码即 profile 内生效，重装仅需重启；Git/npm 通道为快照安装，更新需卸载重装
+- desktop profile 无 `patchReload: live`：装/卸/升级后重启 DSH 生效；web profile 有 live 重载
 
 ### 依赖契约
 
 - `sessionQuery.listSessions/readSession`、`webServer.register`、`settings.section` 槽位、`--dsw-*` token、ModuleLoader 包装格式
-- 验证版本：DSH 0.1.0-rc.6
+- 验证版本：DSH 0.1.7-rc.2（桌面版，runtime node 24.18.1 / pnpm 11.7.0）；0.1.6-alpha.2（web）
 
-## 模块架构：dsh-time-awareness
-
-### 定位与数据流
-
-host-only 模块（无 client 半、无 HTTP 路由），让模型感知墙上时钟：每个会话轮次注入一条带来源归属的时间读取消息
-
-```
-AgentLoop 提出 step
-        │ dispatch waterfall "agent/pre-step"
-        ▼
-prepend 监听器：先 await next() 委托下游决策
-        │ reject / aborted → 原样放行
-        │ step !== 1 且非 everyStep → 原样放行
-        │ refreshIntervalMs 节流命中（无状态扫 session 事件）→ 原样放行
-        ▼
-组装三行文本：时间戳（浏览器时区优先）+ 时区策略 + 距上条可见消息耗时
-        │ decision.messages 追加一条 sourced UserMessage
-        ▼
-AgentLoop 在 step/start 后落盘，进入会话历史直至 compaction 遮蔽
-```
-
-### host 半（modules/dsh-time-awareness/lib/index.js）
-
-- `inject: ["agents"]`；监听器经 `ctx.on("agent/pre-step", handler, { prepend: true })` 注册，随 fiber 卸载自动移除
-- 注入文本三行：`Current time at turn N start: 2026-08-20T17:24:05+08:00[Asia/Shanghai]`、浏览器时区策略（resolved → 按该时区解释未限定时间；mixed/missing → 提示向用户澄清）、`Elapsed since the preceding model-visible message: <duration>`
-- 浏览器时区取自本轮 user-rpc 消息源的 `clientTimeZone`（web 客户端每次 prompt 附带），IANA 正则 + `Intl.DateTimeFormat` 双重校验；缺失/混合回退配置 `timeZone`，再回退进程时区
-- 消息 source 遵循惯例：`{ kind: "plugin", plugin: "time-awareness", form: "snapshot", sections: [{ name, text }] }`
-- 节流无状态：倒序扫 `agent.session.events` 找最近一条本插件注入的 `event.time`，compaction/resume 后不需进程内缓存
-- 耗时基线：step 1 取最近 user/message、assistant/message、tool/result（排除本插件自身注入）；everyStep 模式后续 step 取本轮上一条本插件读取
-- 失败隔离：注入计算异常只 `ctx.logger.warn` 并原样放行下游决策，绝不挂 turn；配置非法（未知键、坏时区、负间隔）在 apply 期抛出，fail loud
-- 零裸包导入：profile 目录解析不到运行树 node_modules，配置手校验替代 schemastery，`Intl`/`crypto.randomUUID` 均为运行时内建
-
-### 配置
-
-patch 行默认无 config 即「每轮一条、进程时区、不节流」，可按需加：
-
-```yaml
-- insert:
-    - id: time-awareness
-      name: 'dsh-time-awareness'
-      config:
-        timeZone: Asia/Shanghai   # 可选，浏览器时区缺失时的显示回退
-        refreshIntervalMs: 60000  # 可选，0/省略 = 不节流
-        everyStep: true           # 可选，默认 false = 只注入每轮 step 1
-```
-
-### 部署拓扑与已知限制
-
-- 走自有模块标准通道：真包 `~/.dsh/profiles/web/dsh-time-awareness/` + 链接 A/B + patch 行，`dspm install|uninstall|reload dsh-time-awareness` 统一管理
-- 监听器注册在 agents 注册表根，对所有 agent 生效（含 subagent / workflow worker），token 成本按并发 agent 数放大；默认每轮一条 + 单条三行控制体量
-- 注入发生在请求准备期：后续准备失败时读取仍留在历史；每条读取累积至 compaction 遮蔽，append-only 不破坏 KV cache 前缀
-- 验证版本：DSH 0.1.0-rc.8
-
-## 第三方接入通道（bundle）
-
-第三方模块登记在 `third-party.json`（pin 版本 + channel: bundle + 验证过的 DSH 版本），dspm 读取后编排；当前 registry 为空。通用流程：
-
-```
-dspm install <pkg>（installBundle）
-        │ 1. 幂等前置：pnpm-workspace.yaml allowBuilds（官方通道兜底）
-        │    + profile package.json trustedDependencies: ["node-pty"]（bun 侧）
-        │ 2. bun add <pkg>@<registry pin 版本>（cwd=profile）
-        │ 3. prunePeers：剪除全部 peer 与 @deepseek-ai/*（bun 强制自动装
-        │    peer 且无开关，留着与宿主 cordis 双实例必炸）
-        │ 4. fixExecBits：恢复 node-pty spawn-helper 可执行位（bun 解包丢 +x）
-        │ 5. reconcileBundles：声明 dsh.bundle.patch 才登记进 dsh.profile.bundles
-        ▼
-profile package.json：dependencies + dsh.profile.bundles 登记
-        │ profile 启动时 bundle patch 自动挂载
-        ▼
-```
-
-与官方 `dsh plugin` 通道的差异及原因：官方通道是纯 pnpm 转发（直连 npmjs，分钟级卡死）+ `autoInstallPeers: false` 天然不装 peer；bun 快但强制装 peer 且无开关，故 dspm 装后手动剪除并把官方通道的 `dsh.profile.bundles` reconcile 逻辑（reconcilePlugins）自理。
-
-### 关键点
-
-- 与自有模块的符号链接 + patch 行通道完全独立：不建链接、不写用户 patch 行；手写挂载行会与 bundle 双挂载（duplicate prefix route 导致启动失败）
-- 卸载走 `dspm uninstall <pkg>`（底层 `bun remove` + reconcileBundles 摘除）；升级走 `dspm update <pkg>`（npm view 最新版 → 更新 registry pin → 重装）；锁版回滚走 `dspm pin`
-- 接入前评估官方内置覆盖度：dsh-better-sidebar 曾以此通道接入（pin 0.18.0，适配 DSH 0.1.0-rc.8），2026-09-19 因官方 0.1.6-alpha 内置右侧栏（ui-sidebar-files / terminal / browser / documentpreview）能力重叠而移除，registry 清空
+> 前身 dsh-panel 时期的 time-awareness 模块架构、第三方 bundle 接入通道（dspm + bun + prunePeers）已随 2026-09-27 裁剪移除，设计记录保留在 `docs/requirements.md` 历史条目

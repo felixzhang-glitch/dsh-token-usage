@@ -2,8 +2,9 @@
 
 以 `dsh-token-usage`（用量统计）为实例，覆盖静态 Cordis 插件从开发到分发的完整链路
 
-> 适用对象：DeepSeek Harness 0.1.0-rc 系列，`dsh web` 部署
+> 适用对象：DeepSeek Harness 0.1.0-rc 系列桌面版与 web（0.1.7-rc.2 实读核对；桌面版即 web 面内嵌）
 > 实例插件：设置页用量统计，host 聚合 `/token-usage/stats` 路由 + client 单页多视图 UI（时间范围筛选、指标卡、活跃热力图、按天趋势、模型用量）
+> 分发通道：官方组合包（bundle）——桌面版/web 插件页「添加插件」或 `dsh plugin --profile <p> add <spec>`
 
 ## 插件的两种形态
 
@@ -18,13 +19,14 @@
 
 ```
 dsh-token-usage/
-├── package.json      # 双面声明：exports + dsh.client
+├── package.json      # 单包声明：exports + dsh.bundle + dsh.client + peerDependencies + files
+├── cordis.patch.yml  # 组合包挂载行（dsh.bundle.patch 指向）
 └── lib/
     ├── index.js      # host 半：ESM，export { apply, inject, name }
     └── client.js     # client 半：window.__ModuleLoader__.load 包装的浏览器 bundle
 ```
 
-一个包同时承载 host 与 client 两面，组合里只需一行
+一个包同时承载 host 与 client 两面，`dsh.bundle.patch` 声明让它成为官方通道可安装的组合包
 
 ### package.json 契约
 
@@ -38,24 +40,32 @@ dsh-token-usage/
     "./client":     { "default": "./lib/client.js" },
     "./package.json": "./package.json"
   },
+  "files": ["lib", "cordis.patch.yml", "README.md"],
   "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-settings"
-      ],
+      "inject": ["@deepseek-ai/dsh-client-ui-settings"],
       "platform": "web"
     }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-session-query": "*",
+    "@deepseek-ai/dsh-host-webserver": "*",
+    "react": "^18.0.0"
   }
 }
 ```
 
 要点
 
+- `dsh.bundle.patch`：组合包声明，指向包内挂载 patch 文件（字符串或有序列表）；官方插件页 / `dsh plugin add` 只装组合包，无此声明 inspect 直接判 not-a-bundle
+- `files`：分发白名单，npm pack 与 pnpm 本地路径 / Git 安装共用该语义；`cordis.patch.yml` 必须在列，否则装完即 not-a-bundle
 - `exports["./client"]`：client-modules 用它定位浏览器 bundle，支持字符串或 `{ default }` 条件形式
 - `exports["./package.json"]`：必须显式导出，`require.resolve('<name>/package.json')` 才能穿透 exports 映射
-- `dsh.client.inject`：client 条目依赖的包名列表，控制实例化顺序；写实际会用到的运行时/槽位包
-- `dsh.client.platform`：必须与部署面匹配（web）
+- `dsh.client.inject`：client 条目依赖的包名列表，控制实例化顺序；写实际会用到的运行时/槽位包（注意 `@deepseek-ai/dsh-client-runtime` 在 0.1.7-rc.2 已不存在，官方包 inject 均为包名列表）
+- `dsh.client.platform`：必须与部署面匹配（web；桌面版即 web 面）
+- `peerDependencies`：`@deepseek-ai/dsh` / `@deepseek-ai/dsh-*` 范围会被官方安装门 semver 校验（`*` 永通过，DSH 升级不断加载）；profile 层 `autoInstallPeers: false`，声明 peer 不会被自动安装，无宿主双实例
 
 ### host 半（lib/index.js）
 
@@ -126,45 +136,43 @@ window.__ModuleLoader__.load({
 - locale：`ctx.get('locale').getSnapshot().active` 读当前语言，`.subscribe(fn)` 订阅切换；返回的 disposer 交给 `react.useEffect`
 - 静态插件没有 `host.call`；client 取 host 数据要走 host 半注册的 HTTP 路由（本例 `fetch('/token-usage/stats')`）
 
-### 挂载：cordis.patch.yml
+### 挂载：组合包 patch（cordis.patch.yml）
 
-用户侧挂载点是 profile 的 patch 文件（`~/.dsh/profiles/web/cordis.patch.yml`），顶层数组，每个元素是一条 patch
+包根的 `cordis.patch.yml` 是组合包挂载行，安装登记进 `dsh.profile.bundles` 后自动应用
 
 ```yaml
 - insert:
     - id: token-usage
-      name: 'dsh-token-usage'
+      name: dsh-token-usage
 ```
 
 语义
 
+- bundle patch 按 `dsh.profile.bundles` 列表顺序应用到空 entry 列表，之后才是 profile 自身 `cordis.patch.yml`（用户层）与启动器 `--patch` 层
 - `insert` 不带 `id` → 追加到组合根列表末尾；带 `id` → 追加进某个 group 条目
 - 不带 `insert` 的 patch 是覆盖：`{ id, name?, ...overrides }` 按 id 定位已有行改字段
 - 匹配不到的 patch 只警告跳过，不致命；但行加载失败会导致启动失败（fail loud）
-- patch 文件用 js-yaml 解析（JSON_SCHEMA + `!!js` 扩展），注释自由
-- web profile 的 HMR 行默认禁用 → 改 patch 必须重启生效
+- 用户层 `~/.dsh/profiles/<profile>/cordis.patch.yml` 仍可对 bundle 行做覆盖（改 config / disabled），优先级高于 bundle patch
+- desktop profile 无 live 重载（web profile 声明 `patchReload: "live"` 才即时生效），装/卸/改覆盖项后需重启
 
-> 绝不改随发行包安装的 shipped preset（`agent-presets` 目录），升级会覆盖；用户层只动 `cordis.patch.yml`
+> 绝不改随发行包安装的 shipped preset（`agent-presets` 目录），升级会覆盖；也绝不对组合包手写 profile 挂载行——与 bundle 双挂载（duplicate prefix route）会导致启动失败
 
-### 模块解析的两条链路（为什么要两个符号链接）
+### 模块解析：双锚点（0.1.6-alpha 起）
 
-裸包名 `dsh-token-usage` 要在两个互不相通的解析上下文里都能命中
+官方 app-boot 的 ResolutionRouter 接管 Node 的 ESM/CJS 解析：bundle 名先解析自 dsh 安装树（运行时自带官方包），再解析自 profile 目录，profile `node_modules` 内 pnpm 管理的条目优先
 
-1. client 侧：client-modules 用 `createRequire(ctx.baseUrl)` 解析 `<name>/package.json`，`baseUrl` 是 profile 目录 → 命中 profile 自己的 `node_modules/`
-2. host 侧：Loader 对裸名执行 `await import(name)`，解析上下文是运行树内的 loader 包 → 命中运行树（npx 缓存或安装目录）的 `node_modules/`
-
-> 0.1.6-alpha 起官方引入 ResolutionRouter：profile 上下文只认 profile package.json 声明 + profile 自身 node_modules 内的本地包，profiles 父级 `node_modules` 不再参与解析；因此链接 A 必须落在 `~/.dsh/profiles/web/node_modules/` 且 package.json 里要有 `link:./<name>` 依赖声明
-
-因此标准布局
+1. host 侧：Loader 对裸名执行 `await import(name)`，命中 profile `node_modules/<name>`
+2. client 侧：client-modules 以 profile 目录为 baseUrl `require.resolve('<name>/package.json')`，同样命中 profile `node_modules`
 
 ```
-真包      ~/.dsh/profiles/web/dsh-token-usage/          # 持久、用户自有
-链接 A    ~/.dsh/profiles/web/node_modules/dsh-token-usage  # -> ../dsh-token-usage
-声明      ~/.dsh/profiles/web/package.json dependencies: link:./dsh-token-usage
-链接 B    <运行树>/node_modules/dsh-token-usage          # -> 真包绝对路径
+安装      pnpm add <spec>（profile 目录内）
+实体      ~/.dsh/profiles/<profile>/node_modules/dsh-token-usage
+声明      ~/.dsh/profiles/<profile>/package.json dependencies + dsh.profile.bundles
+挂载      包内 cordis.patch.yml（dsh.bundle.patch 声明）
 ```
 
-真包放 profile 目录：升级 DSH 不丢源码；两条链接都是廉价的符号链接
+> 本地路径通道 pnpm 落 `link:` 活链接：仓库改码即 profile 内生效，更新只需重启；Git / npm 通道为快照安装，更新需插件页卸载重装
+> 历史：0.1.6-alpha 前需要双符号链接（链接 A 落 profile node_modules + 链接 B 落运行树）+ `link:` 依赖声明手动挂 patch 行；该通道已随官方 bundle 分发废弃
 
 ## 开发
 
@@ -215,71 +223,81 @@ node --check lib/client.js && node --check lib/index.js   # 语法
 
 | 症状 | 定位 |
 | --- | --- |
-| 启动报 `token-usage` 行未激活 | 两条符号链接目标是否存在；`inject` 的服务是否在当前组合挂载 |
-| host 正常但设置页无条目 | 链接 A 失效（client 解析不到包）；浏览器硬刷新 |
+| 插件页安装失败 | 展开报错详情看 pnpm 诊断摘要；完整日志 `~/.dsh/profiles/<profile>/.plugin-manager/logs`；本地路径通道确认输入绝对路径且含 package.json / cordis.patch.yml |
+| 启动报 `token-usage` 行未激活 | 插件页确认该包已启用；`inject` 的服务是否在当前组合挂载；`files` 白名单是否漏了挂载 patch |
+| host 正常但设置页无条目 | client 解析（exports["./client"] 与 dsh.client 声明）；浏览器硬刷新 |
 | 条目出现但一直加载 | `/token-usage/stats` 返回 500，看 `error` 字段；多为 sessionQuery 读取失败 |
 | 数据为空 | 确认有带 usage 的模型请求；检查 fork 去重是否误杀（seedLength 逻辑） |
-| patch 改动不生效 | web 无配置 HMR，必须重启 |
+| 启动失败 duplicate prefix route | profile `cordis.patch.yml` 残留手写 token-usage 挂载行（与 bundle 双挂载），删手写行 |
 
 ### 升级
 
-1. 覆盖 `~/.dsh/profiles/web/dsh-token-usage/` 下文件（仓库内直接 `dspm reload dsh-token-usage`）
-2. 重启 DSH（`dspm reload dsh-token-usage --restart --yes`）
+1. 本地目录通道（`link:` 活链接）：仓库改码即 profile 内生效，重启 DSH 即新版本
+2. GitHub 通道：push 后在插件页「卸载 → 安装」重装
+3. CLI：`dsh plugin --profile <profile> remove dsh-token-usage` 后重新 add
 
 > client bundle 带 `?rev=<内容哈希>` 缓存戳，改 client.js 后浏览器自动取新，无需手动清缓存
 
 ### 回滚
 
-- 临时下线：从 `cordis.patch.yml` 删掉该 insert 段，重启；包文件保留
-- 完全卸载：删行 + 删两条链接 + 删包目录（`dspm uninstall dsh-token-usage` 一键，自动留 `cordis.patch.yml.bak-uninstall` 备份）
+- 临时下线：插件页关闭该包开关（依赖保留）或 profile `cordis.patch.yml` 对该行加 `disabled: true` 覆盖，重启
+- 完全卸载：插件页「卸载」一键（`dsh.profile.bundles` 摘除 + pnpm remove）；安装失败时官方自动恢复 manifest / lockfile
 
 ### 约定
 
-- patch 文件改动前备份（`.bak-*` 后缀）
-- 一个插件一个顶层 insert 段，注释写明用途与卸载方式，方便脚本化处理
+- 对 profile 的变更只走插件页或 `dsh plugin` CLI，不手改 `dsh.profile.bundles` 与 dependencies
+- 用户层覆盖项（config / disabled）写 profile `cordis.patch.yml`，一个插件一个覆盖段并注释用途
 
 ## 部署
 
-### 打包
+### 分发面
+
+`files` 白名单即分发面：`lib`、`cordis.patch.yml`、`README.md`（package.json / LICENSE 自动包含）。验证：
 
 ```
-dist/
-├── dsh-token-usage/    # 插件包本体
-└── README.md
-tar czf dsh-token-usage-dist.tar.gz dist/   # 权限先 chmod 755/644
+pnpm pack --dry-run
 ```
 
-> 仓库内安装统一由仓库根的 `dspm`（node 单文件命令）承担，不再随包分发独立安装脚本
+### 安装（官方组合包通道）
 
-### dspm 安装自有模块的四步
+桌面版/web 插件页「添加插件」，「包名或地址」输入：
 
-1. 复制包到目标 `~/.dsh/profiles/web/dsh-token-usage/`
-2. 建链接 A（profile 自己的 node_modules）并在 profile package.json 写 `link:./<name>` 依赖声明（0.1.6-alpha 起官方解析路由的硬性要求）
-3. 自动探测运行树建链接 B：优先正在运行的 dsh web 进程反查 `node_modules` 根，回退 `command -v dsh` realpath、bunx 临时缓存（按启动通道优先匹配 `dsh@<channel>` 目录）、`~/.npm/_npx`；探测失败接受显式传参 `--dsh-root <node_modules 根>`
-4. 幂等追加 patch 行：空文件直接写、已有行跳过、其他条目保留追加；写入前若运行树内可达 js-yaml 则做 YAML 校验
+- GitHub 仓库地址：`https://github.com/felixzhang-glitch/dsh-panel`
+- 本地插件目录：仓库克隆的绝对路径（开发机）
+
+或 CLI：
+
+```
+dsh plugin --profile <profile> add https://github.com/felixzhang-glitch/dsh-panel
+dsh plugin --profile <profile> add /Users/name/dsh-panel
+```
+
+流程：inspect 预检（读 `dsh.bundle` 声明）→ pnpm add 装入 profile → `dsh.profile.bundles` 登记 → 包内挂载行自动生效；失败自动恢复 `package.json` 与 `pnpm-lock.yaml`
 
 ### 目标机要求
 
-- DSH 0.1.0-rc 系列且初始化过（存在 `~/.dsh/profiles/web/`）
-- node 在 PATH（DSH 本身依赖）
-- 安装后重启 DSH
+- DSH 0.1.0-rc 系列桌面版或 web，profile 已初始化（存在 `~/.dsh/profiles/<profile>/`）
+- GitHub 通道需网络可达（GitHub 直连或先 `git ls-remote` 通过）；本地路径通道离线可用
+- 安装后重启 DSH（desktop profile 无 live 重载）
 
 ### 已知限制
 
-> `dsh` 经 npx/bunx 升级会重建缓存目录，链接 B 随之失效，启动时该行加载失败；`dspm doctor` 可检出，`dspm install <模块>` 即修复。若发行方想彻底消除该耦合，需要上游支持以 profile 为基底的裸名解析（`bareModuleBaseUrl`）
+- npm 通道不可用：`dsh-token-usage` 包名已被第三方同名包（Tastelessor/dsh-usage-stats）占用，对话框输裸包名装到的是别人的插件
+- `peerDependencies` 用 `*` 永过安装门：DSH 大版本破坏性升级不会拦截安装，靠启动失败 / 运行异常暴露，升级后须实机验证
+- 本地路径通道落 `link:`：目标机移动仓库目录会断链，插件页重装即可
 
 ### 兼容性声明
 
 - 依赖契约：`sessionQuery.listSessions/readSession`、`webServer.register`、`settings.section` 槽位、`--dsw-*` token、ModuleLoader 包装格式
-- 验证版本：DSH 0.1.0-rc.6；跨小版本升级后先跑本地验证三层再发布
+- 验证版本：DSH 0.1.7-rc.2（桌面版）/ 0.1.6-alpha.2（web）；跨版本升级后先跑本地验证三层再发布
 
 ## 附录：文件清单
 
 | 路径 | 作用 |
 | --- | --- |
-| `~/.dsh/profiles/web/cordis.patch.yml` | 用户挂载层（本插件唯一配置入口） |
-| `~/.dsh/profiles/web/dsh-token-usage/` | 插件真包 |
-| `~/.dsh/profiles/web/node_modules/dsh-token-usage` | 链接 A，profile 本地解析 |
-| `~/.dsh/profiles/web/package.json` | profile 清单，`link:./dsh-token-usage` 依赖声明 |
-| `<运行树>/node_modules/dsh-token-usage` | 链接 B，host 解析 |
+| `~/.dsh/profiles/<profile>/node_modules/dsh-token-usage` | 插件实体（本地路径通道为 `link:` 活链接） |
+| `~/.dsh/profiles/<profile>/package.json` | profile 清单：dependencies 依赖 + `dsh.profile.bundles` 登记 |
+| `~/.dsh/profiles/<profile>/pnpm-workspace.yaml` | 官方初始化的 pnpm 约束（autoInstallPeers: false / nodeLinker: hoisted） |
+| `~/.dsh/profiles/<profile>/.plugin-manager/logs` | 安装诊断日志 |
+| 包内 `cordis.patch.yml` | 组合包挂载行（`dsh.bundle.patch` 声明） |
 | `~/.dsh/sessions/**/session.jsonl.zstd` | 数据源（只读） |

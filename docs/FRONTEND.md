@@ -1,6 +1,6 @@
 # 前端约定
 
-> 适用范围：模块 client 半（浏览器侧）。当前仅 dsh-token-usage 有 client 半（`lib/client.js`），dsh-time-awareness 为 host-only
+> 适用范围：插件 client 半（浏览器侧，`lib/client.js`）
 
 ## 技术栈
 
@@ -11,11 +11,12 @@
 ## 目录约定
 
 ```
-<模块>/
+dsh-token-usage/
 ├── lib/
-│   ├── index.js    # host 半：Cordis 插件（apply/inject/name），注册 HTTP 路由供数
-│   └── client.js   # client 半：ModuleLoader 包装的浏览器 bundle，只做展示
-└── package.json    # 双面声明：exports + dsh.client（inject 运行时包，platform: web）
+│   ├── index.js          # host 半：Cordis 插件（apply/inject/name），注册 HTTP 路由供数
+│   └── client.js         # client 半：ModuleLoader 包装的浏览器 bundle，只做展示
+├── cordis.patch.yml      # 组合包挂载行（dsh.bundle.patch 声明）
+└── package.json          # 单包声明：exports + dsh.bundle + dsh.client（inject 包名，platform: web）+ peerDependencies + files 白名单
 ```
 
 ## 组件与页面规范
@@ -29,7 +30,7 @@
 ## 交互与视觉基线
 
 - 设计规范：跟随宿主主题，零图表库——能用 DOM/SVG/CSS 表达的可视化不引依赖（div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图）
-- 兼容性：仅 DSH web 部署（浏览器内核以宿主为准）
+- 兼容性：DSH 桌面版与 web 部署（浏览器内核以宿主为准，桌面版即 web 面包内嵌）
 
 ## 性能要求
 

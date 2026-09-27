@@ -4,36 +4,21 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 
 ## 核心指令
 
-- 本仓库是 DeepSeek Harness (DSH) 插件集合仓库 dsh-panel 的开发迭代仓库；自有模块 dsh-token-usage 在仓库根（历史原因），新模块落 `modules/`（现有 dsh-time-awareness），后续会持续新增模块
+- 本仓库是 DSH 插件 dsh-token-usage 的单插件仓库（前身 dsh-panel 插件集合，2026-09-27 裁剪为单插件接入桌面版官方插件管理）；仓库根即插件包
 - 每次需求迭代必须追加更新 `docs/requirements.md`（时间倒序）
 - 设计/架构变更需同步更新 `docs/design.md` / `docs/architecture.md`
-- 新模块接入需同步更新本文件代码地图与 docs 文档中的模块清单
+- 文档口径变更需同步本文件代码地图与 README
 
 ## 代码地图
-
-### 平台层
 
 | 路径 | 职责 |
 | --- | --- |
 | `docs/` | 设计、架构、需求迭代文档与参考资料 |
-| `dspm`（仓库根，无后缀） | 平台统一命令：`dspm <list\|install\|uninstall\|reload\|add\|update\|pin\|doctor\|web> [target]`，支持 `-h`；自有模块走符号链接 + patch 行，第三方走 bun 直装 + 手动 reconcile bundles；`web` 管 dsh web 服务生命周期（status/start/stop/restart/log，pidfile 与日志在 DSH_HOME，启动通道默认 `@alpha`，`--channel <tag>` 可换） |
-| `third-party.json` | 第三方模块 registry（name / spec pin / channel / note），`dspm add` 写入，`install/reload/update/pin` 读取；当前为空（dsh-better-sidebar 已于 2026-09-19 移除：官方 0.1.6-alpha 内置右侧栏文件树/终端/浏览器/预览，能力重叠） |
-
-### 模块 dsh-token-usage（用量统计，设置 → 用量统计）
-
-| 路径 | 职责 |
-| --- | --- |
 | `lib/index.js` | host 半：Cordis 插件（`apply/inject/name`），聚合会话日志，注册 `GET /token-usage/stats`（60s 缓存 + 单飞，`?refresh=1` 强刷带 5s 冷却） |
 | `lib/client.js` | client 半：ModuleLoader 包装的浏览器 bundle，注入 `settings.section` 槽位，三视图 UI（零图表库） |
-| `package.json` | 双面声明：`exports` + `dsh.client`（inject 运行时包，platform: web） |
+| `cordis.patch.yml` | 组合包挂载行（`dsh.bundle.patch` 声明：insert token-usage → dsh-token-usage） |
+| `package.json` | 单包声明：exports + dsh.bundle + dsh.client + peerDependencies + files 白名单 |
 | `docs/plugin-guide.md` | 插件开发·维护·部署指南（对外发布文档） |
-
-### 模块 dsh-time-awareness（时间感知，modules/dsh-time-awareness/）
-
-| 路径 | 职责 |
-| --- | --- |
-| `modules/dsh-time-awareness/lib/index.js` | host-only Cordis 插件：`agent/pre-step` prepend 监听器，默认每轮 step 1 注入一条 sourced 时间读取（带时区时间戳、浏览器时区策略、耗时）；零裸包导入，节流无状态 |
-| `modules/dsh-time-awareness/package.json` | host 单面声明（无 `dsh.client`，无 UI） |
 
 ## 关键约束
 
@@ -41,6 +26,8 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 - client 无 JSX，只用 `react.createElement`；bundle 必须手写 `window.__ModuleLoader__.load` 包装
 - 样式只用 `--dsw-*` 主题 token；locale 文案走 `ctx.get('locale')` 订阅
 - 静态插件没有 `host.call`，client 取 host 数据走 HTTP 路由
-- 语法验证：`node --check lib/*.js`（modules/ 有新模块时同样 `node --check`；dspm 改动跑 `node --check dspm`）
-- dspm 沙盒演练：`DSH_HOME=<临时目录> ./dspm ... --dsh-root <假运行树>`（沙盒需自带 dspm + third-party.json + package.json 副本）；注意运行树自动探测会优先命中正在运行的真实 dsh 进程，沙盒里务必显式传 `--dsh-root`；非交互 shell 无 node/bun，需把 fnm node 与 `~/.bun/bin` 加进 PATH
-- DSH 契约与开发规范见 `docs/reference/dsh-plugin-spec.md`
+- 分发走官方组合包通道（桌面版/web 插件页「添加插件」或 `dsh plugin --profile <p> add <spec>`，spec 支持本地路径 / Git 地址 / npm 包名）：pnpm 装入 profile + `dsh.profile.bundles` 登记 + 包内 `cordis.patch.yml` 自动挂载；禁止手写 profile patch 挂载行或自建符号链接（旧 dspm 通道已废弃，与 bundle 双挂载会导致启动失败）
+- `peerDependencies` 中 `@deepseek-ai/dsh*` 会被官方安装门 semver 校验（`*` 永通过）；profile 层官方初始化 `autoInstallPeers: false` + `nodeLinker: hoisted`，声明 peer 不会双实例
+- 语法验证：`node --check lib/*.js`（无 node 环境时可用 DSH 桌面版自带 runtime node）
+- 不发布 npm：`dsh-token-usage` 包名已被第三方同名包（Tastelessor/dsh-usage-stats）占用
+- DSH 契约与开发规范见 `docs/reference/dsh-plugin-spec.md`、`docs/reference/dsh-plugin-manager.md`
