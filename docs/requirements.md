@@ -19,6 +19,7 @@
   - 分发通道切换为官方 plugin-manager 组合包通道（桌面版插件页 / `dsh plugin --profile <p> add <spec>`，spec 支持本地绝对路径 / Git 地址 / npm 包名；pnpm 装入 profile + dsh.profile.bundles 登记 + 包内挂载行自动生效，失败自动回滚 manifest/lockfile）；dspm 符号链接双链路通道废弃
   - 契约核对（0.1.7-rc.2 实读运行时）：sessionQuery / webServer 服务、settings.section 槽位、ModuleLoader roster id（= 包名）全部健在；桌面版 runtime node 24.18.1 / pnpm 11.7.0
   - 文档全量同步：README / AGENTS / design / architecture / PRODUCT / plugin-guide / TEST / SECURITY / RELIABILITY / FRONTEND / QUALITY_SCORE / CHANGES / reference（新增 dsh-plugin-manager.md 与 deepseek-ai-dsh.md 更新，删除过时 bun.md）
+  - 仓库更名：GitHub 仓库 dsh-panel → dsh-token-usage（gh repo rename，本地 origin 随更；旧地址 301 重定向）；package.json repository 与活文档安装地址同步；本地目录同步更名为 ~/data/github/dsh-token-usage
 - 验证：`node --check` 双文件通过；`pnpm pack --dry-run` 白名单核对（仅 lib/ / cordis.patch.yml / README.md / package.json / LICENSE）；沙盒假 profile（package.json + pnpm-workspace.yaml 骨架）`pnpm add <仓库绝对路径>` 演练通过，落 `link:` 活链接；启动路径同款函数实读复演——`loadOverlayPatches + composeEntries`（dsh-app-boot 0.1.7-rc.2）把挂载 patch 组合出 `{id: token-usage, name: dsh-token-usage}` 行，`evaluatePluginCompatibility` 对本包 manifest 判 PASS；js-yaml（运行时同款）解析通过；桌面版插件页实机安装（本地目录 `/Users/yunhao/data/github/dsh-panel`）后重启验收
 - 状态：已完成
 

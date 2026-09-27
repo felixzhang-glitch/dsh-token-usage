@@ -8,14 +8,14 @@ DeepSeek Harness (DSH) token 用量统计插件：指标卡、活跃热力图、
 
 DSH 0.1.0-rc 系列（桌面版或 web），侧边栏「插件」→「添加插件」，「包名或地址」输入：
 
-- GitHub 仓库地址：`https://github.com/felixzhang-glitch/dsh-panel`
-- 本地插件目录：仓库克隆的绝对路径（如 `/Users/name/dsh-panel`，本机开发用）
+- GitHub 仓库地址：`https://github.com/felixzhang-glitch/dsh-token-usage`
+- 本地插件目录：仓库克隆的绝对路径（如 `/Users/name/dsh-token-usage`，本机开发用）
 
 或 CLI 等价通道：
 
 ```
-dsh plugin --profile <profile> add https://github.com/felixzhang-glitch/dsh-panel
-dsh plugin --profile <profile> add /Users/name/dsh-panel
+dsh plugin --profile <profile> add https://github.com/felixzhang-glitch/dsh-token-usage
+dsh plugin --profile <profile> add /Users/name/dsh-token-usage
 ```
 
 - 官方组合包通道：pnpm 装进 profile + 登记 `dsh.profile.bundles`，包内 `cordis.patch.yml` 自动挂载，无需手改任何 profile 文件；安装失败自动恢复 manifest 与 lockfile

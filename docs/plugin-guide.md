@@ -262,14 +262,14 @@ pnpm pack --dry-run
 
 桌面版/web 插件页「添加插件」，「包名或地址」输入：
 
-- GitHub 仓库地址：`https://github.com/felixzhang-glitch/dsh-panel`
+- GitHub 仓库地址：`https://github.com/felixzhang-glitch/dsh-token-usage`
 - 本地插件目录：仓库克隆的绝对路径（开发机）
 
 或 CLI：
 
 ```
-dsh plugin --profile <profile> add https://github.com/felixzhang-glitch/dsh-panel
-dsh plugin --profile <profile> add /Users/name/dsh-panel
+dsh plugin --profile <profile> add https://github.com/felixzhang-glitch/dsh-token-usage
+dsh plugin --profile <profile> add /Users/name/dsh-token-usage
 ```
 
 流程：inspect 预检（读 `dsh.bundle` 声明）→ pnpm add 装入 profile → `dsh.profile.bundles` 登记 → 包内挂载行自动生效；失败自动恢复 `package.json` 与 `pnpm-lock.yaml`

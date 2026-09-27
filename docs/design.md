@@ -27,7 +27,7 @@ DeepSeek Harness (DSH) 的 token 用量统计静态插件（自用，仅 macOS�
 
 - 包形态：`dsh.bundle.patch` 声明指向包内 `cordis.patch.yml` 挂载行；`peerDependencies`（`@deepseek-ai/cordis`、`@deepseek-ai/dsh-session-query`、`@deepseek-ai/dsh-host-webserver` 用 `*`，`react ^18`）；`files: ["lib", "cordis.patch.yml", "README.md"]`
 - 安装入口：DSH 桌面版/web 插件页「添加插件」（spec：本地绝对路径 / Git 仓库地址 / npm 包名），或 `dsh plugin --profile <p> add <spec>`；底层 pnpm 装入 profile 目录并登记 `dsh.profile.bundles`，包内挂载行自动生效，失败自动恢复 manifest 与 lockfile
-- 通道地址：GitHub `https://github.com/felixzhang-glitch/dsh-panel`（远端快照，更新需卸载重装）；本地路径（落 `link:` 活链接，改码即 profile 内生效）；不发布 npm（包名被第三方同名包 Tastelessor/dsh-usage-stats 占用）
+- 通道地址：GitHub `https://github.com/felixzhang-glitch/dsh-token-usage`（远端快照，更新需卸载重装）；本地路径（落 `link:` 活链接，改码即 profile 内生效）；不发布 npm（包名被第三方同名包 Tastelessor/dsh-usage-stats 占用）
 - 安装门与 peer：`peerDependencies` 中 `@deepseek-ai/dsh*` 范围被官方 semver 校验（`*` 永通过，桌面升级不断加载）；profile 层 `autoInstallPeers: false`（官方初始化），声明 peer 不会被自动安装，无宿主双实例
 - 重启生效：desktop profile 未启用 `patchReload: live`，装/卸后需重启 DSH；web profile 有 live 重载
 - 旧通道废弃：dspm 符号链接双链路（链接 A/B + `link:` 依赖声明）不再使用；手写挂载行与 bundle 双挂载会导致启动失败，禁止混用
