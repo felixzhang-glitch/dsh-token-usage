@@ -9,7 +9,14 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 - 设计/架构变更需同步更新 `docs/design.md` / `docs/architecture.md`
 - 文档口径变更需同步本文件代码地图与 README
 
-<img width="1601" height="2617" alt="image" src="https://github.com/user-attachments/assets/b0b01915-88e8-47f0-a6f4-a909f709353f" />
+<img width="1550" height="642" alt="image" src="https://github.com/user-attachments/assets/8e017fb9-f59f-46e1-ac9c-649d4bf6c919" />
+<img width="563" height="226" alt="image" src="https://github.com/user-attachments/assets/51da84d8-af77-4032-94e2-16d937b70cd2" />
+<img width="1086" height="666" alt="image" src="https://github.com/user-attachments/assets/96be45bd-1991-4798-b0e7-d7ec11497f48" />
+<img width="1096" height="720" alt="image" src="https://github.com/user-attachments/assets/615c3602-293e-4191-9b90-2de940d1275e" />
+
+
+
+
 
 
 ## 代码地图
