@@ -10,7 +10,7 @@ DeepSeek Harness (DSH) 的 token 用量统计静态插件（自用，仅 macOS�
 
 | 模块 | 功能 | 挂载位置 | 状态 |
 | --- | --- | --- | --- |
-| dsh-token-usage | 模型用量统计（指标卡、热力图、按天趋势、模型用量） | 设置 → 用量统计 | 已发布 v0.3.0 |
+| dsh-token-usage | 模型用量统计（指标卡、热力图、按天趋势、模型用量） | 设置 → 用量统计 | 已发布 v0.3.1 |
 
 > 前身 dsh-panel 为插件集合仓库：dsh-time-awareness（时间感知）模块与 dspm 统一管理命令已于 2026-09-27 随「桌面版接入」裁剪移除；第三方 dsh-better-sidebar 已于 2026-09-19 因官方内置右侧栏移除。历史沿革见 `docs/requirements.md`
 

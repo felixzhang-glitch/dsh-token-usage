@@ -27,7 +27,7 @@ dsh plugin --profile <profile> add /Users/name/dsh-token-usage
 
 ```
 lib/               # 插件本体
-  index.js         # host 半：聚合 session 日志，注册 GET /token-usage/stats（60s 缓存 + 单飞）
+  index.js         # host 半：聚合 session 日志，注册 GET /token-usage/stats（预热 + SWR 缓存 + 单飞）
   client.js        # client 半：ModuleLoader 包装的浏览器 bundle，注入 settings.section 槽位
 cordis.patch.yml   # 组合包挂载行（dsh.bundle.patch 声明）
 package.json       # exports + dsh.bundle + dsh.client + peerDependencies + files 白名单

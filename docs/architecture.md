@@ -26,10 +26,10 @@ client.js 三视图渲染（时间范围切片，前端不重复聚合）
 
 ### host 半（lib/index.js）
 
-- `collect(sessionQuery)`：扫全部会话，只取 `assistant/message` 事件的 `data.usage`，按总量/按天/按模型/按天×模型四个视图折叠成 `Bucket = {in,cr,cw,out,reason,req,turns}`
+- `collect(sessionQuery)`：扫全部会话，只取 `assistant/message` 事件的 `data.usage`，按总量/按天/按模型（仅 model id，不区分 provider）/按天×模型四个视图折叠成 `Bucket = {in,cr,cw,out,reason,req,turns}`
 - fork 去重：`seedLength > 0` 且父会话在语料内时跳过 `seq < seedLength` 的 seed 事件
 - turns 用每桶独立的 turn id Set 去重后计数；单会话读取失败只计数不中断
-- `apply(ctx)`：闭包内实现缓存（TTL 60s + pending 合并并发请求）与 handler，路由注册包在 `ctx.effect` 内，卸载即注销
+- `apply(ctx)`：激活即后台预热一次全量扫描；闭包缓存为 stale-while-revalidate（非强制请求直接回缓存，过期则后台重建；`?refresh=1` 强制 await 重建，5s 冷却；pending single-flight 保证至多一次扫描）；路由注册包在 `ctx.effect` 内，卸载即注销
 - 响应头 `cache-control: no-store`，错误路径也返回 JSON
 
 ### client 半（lib/client.js）

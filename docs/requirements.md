@@ -8,6 +8,16 @@
 
 ## 记录
 
+### 2026-10-11 token-usage v0.3.1 首载提速（预热 + SWR）与按模型 id 聚合
+
+- 模块：dsh-token-usage
+- 需求：设置页「用量统计」初次加载太慢；统计按模型 id 聚合，provider 前缀（如 qwen / qwen_reason）不再拆分展示
+- 结果：
+  - 首载提速：插件激活即后台预热一次全量扫描，首个 HTTP 请求经 single-flight 复用同一次扫描；缓存策略改为 stale-while-revalidate——非强制请求直接回缓存（过期则后台异步重建），仅 `?refresh=1` 强制 await 重建（保 5s 冷却），TTL 60s 不变；任意时刻至多一次全量扫描
+  - 按模型 id 聚合：`byModel`/`byDayModel` 的 key 去掉 provider（同名模型跨 provider 合并），响应行去掉 `p` 字段（schema 变更，仅自带 client 消费）；client 的 modelAgg / 趋势 series / 最常用模型 / 环图列表全部只按 `m` 展示，删除 provider 副标题与 `tu-modelProv` 样式
+- 验证：`node --check`（DSH 自带 runtime node）双文件通过；实机待重装验收
+- 状态：已完成
+
 ### 2026-09-27 桌面版接入：仓库裁剪为纯 dsh-token-usage + 官方组合包分发
 
 - 模块：平台 + dsh-token-usage

@@ -23,7 +23,7 @@ dsh-token-usage 是 DeepSeek Harness (DSH) 的 token 用量统计插件（自用
 - 不发布 npm：包名已被第三方占用，分发只走 GitHub 仓库地址与本地目录通道
 - 不做动态插件：静态插件形态，随 DSH 启动持久加载，无跨重启保留能力
 - 不自建侧边栏 / 编辑器 / 文件预览：官方 0.1.6-alpha 起内置右侧栏（文件树 / 终端 / 内嵌浏览器 / 文件预览）
-- 不做增量聚合：session header 无更新时间戳、`readSession` 只能全量读，维持全量扫 + 60s 缓存
+- 不做增量聚合：session header 无更新时间戳、`readSession` 只能全量读，维持全量扫 + 预热 + SWR 缓存
 - 不支持 Windows / Linux：安装通道与验证环境仅适配 macOS
 
 ## 用户反馈与待验证问题

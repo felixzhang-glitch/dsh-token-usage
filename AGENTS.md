@@ -24,7 +24,7 @@ This file provides guidance to Qoder (qoder.com) when working with code in this 
 | 路径 | 职责 |
 | --- | --- |
 | `docs/` | 设计、架构、需求迭代文档与参考资料 |
-| `lib/index.js` | host 半：Cordis 插件（`apply/inject/name`），聚合会话日志，注册 `GET /token-usage/stats`（60s 缓存 + 单飞，`?refresh=1` 强刷带 5s 冷却） |
+| `lib/index.js` | host 半：Cordis 插件（`apply/inject/name`），聚合会话日志，注册 `GET /token-usage/stats`（激活预热 + SWR 缓存 + 单飞，`?refresh=1` 强刷带 5s 冷却） |
 | `lib/client.js` | client 半：ModuleLoader 包装的浏览器 bundle，注入 `settings.section` 槽位，三视图 UI（零图表库） |
 | `cordis.patch.yml` | 组合包挂载行（`dsh.bundle.patch` 声明：insert token-usage → dsh-token-usage） |
 | `package.json` | 单包声明：exports + dsh.bundle + dsh.client + peerDependencies + files 白名单 |
