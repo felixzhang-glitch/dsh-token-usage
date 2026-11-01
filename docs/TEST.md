@@ -20,6 +20,11 @@
 4. token-usage 缓存行为：60s TTL + single-flight；`?refresh=1` 连发第二次 `generatedAt` 不变（5s 冷却）
 5. link 活链接：本地路径通道装的是 `link:`，仓库改码 profile 即生效，重装仅需重启；GitHub 通道是远端快照，更新需卸载重装
 6. 沙盒纪律：演练只碰临时目录，真实 profile 变更只经插件页或 `dsh plugin` CLI
+7. 工具统计闭合：`sum(byTool.calls) === sum(byDayTool.calls) === totals.toolCalls`，errs/ms/measured 同样闭合；技能维度键为 `skill:<name>`，MCP 为 `mcp__server__tool`
+8. 工具耗时配对：按 callId 配对 `tool/call → tool/result`，未配对调用只计 calls；错误用 `message.isError`/`data.error`，不走文本启发式
+9. fork 去重：`header.seedLength` 或 `readSession.inheritedEventCount` 跳过 seed 事件，token 与工具/会话指标都不能重复计入父会话历史
+10. 会话统计：会话开始日、主/子会话、每日活跃会话、轮次结果、工作区、会话明细 tokens 之和（未截断时）与总量闭合
+11. 旧/空数据兼容：响应缺 `toolStats`/`sessionStats` 或全零时 client 不崩，按页签显示空态
 
 ## 要点与用例映射
 
@@ -32,4 +37,6 @@
 ## 手工验证清单
 
 - 桌面版插件页：inspect 通过 → 安装成功（bundles 登记）→ 重启后设置 → 用量统计出现
-- token-usage UI：三视图渲染、时间范围切换、中英 locale、主题适配、空数据态、`?refresh=1` 强刷
+- token-usage UI：四页签渲染、时间范围切换（工具/会话/模型同步过滤）、中英 locale、主题适配、各页签空数据态、`?refresh=1` 强刷
+- 工具页：分类占比、每日趋势、Top 工具表、技能/MCP 排名与 host JSON 一致
+- 会话页：会话卡、每日会话、轮次结果、工作区、明细排序与 host JSON 一致

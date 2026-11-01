@@ -8,6 +8,20 @@
 
 ## 记录
 
+### 2026-11-01 token-usage v0.4.0 工具调用与会话统计
+
+- 模块：dsh-token-usage
+- 需求：用量统计面板扩展统计维度——工具调用需覆盖且不限于 MCP / skills / CLI，并补充会话相关统计与其他关键指标
+- 结果：
+  - host 单次扫描同时折叠 token、工具、步数/耗时、消息、轮次结果与会话元数据；响应新增 `toolStats`（byTool / byDayTool）与 `sessionStats`（总览、主/子、工作区、活跃天数、会话明细），`totals`/`byDay` 增加 `steps`、`llmMs`、`toolMs`、`toolMeasured`、`userMsgs`、`asstMsgs`、`toolCalls`、`toolErrs`、`turnOk/turnErr/turnAbort/turnInterrupt` 以及每日 `sessionsStarted/mainStarted/subStarted/activeSessions`
+  - 工具分类固定为 `mcp / skill / cli / file / web / agent / session / other`；`skill` 按 `arguments.name` 生成 `skill:<name>` 维度；MCP 保留 `mcp__server__tool`；工具耗时按 callId 配对并归属 call 当天，未配对调用只计 calls；错误按 `message.isError`/`data.error` 计，未配对 result 不计错误
+  - 会话指标：会话开始日、主/子会话（delegationDepth>0 或 parentSession）、每日活跃会话、用户/助手消息、轮次结果、工作区、最新标题（无标题回退 subagent 描述）、逐会话 tokens/req/turns/steps/toolCalls/toolErrs；会话明细最多 1000 行并标记 `rowsTruncated`
+  - 顺带修复：当前 DSH v4 日志 header 不再携带 `seedLength`，旧逻辑实际未去重 fork seed；改用 `readSession.inheritedEventCount` / `header.seedLength` 双来源跳过继承事件，token 总量因此下降（不再重复计入父会话历史），属正确性修正
+  - client 改为「总览 / 工具 / 会话 / 模型」四页签：总览保留指标卡、热力图、Token 趋势；工具页含分类占比、每日工具趋势、Top 20 工具表、技能与 MCP 排名；会话页含会话卡、每日会话、轮次结果、工作区、可排序会话明细；模型页保留环图
+  - 文档同步：requirements / architecture / design / README / PRODUCT / TEST / FRONTEND / SECURITY / AGENTS / plugin-guide；版本 0.4.0
+- 验证：`node --check lib/*.js` 双文件通过；host mock 读取真实 `~/.dsh/sessions` 全量日志——约 384 个磁盘会话、约 1.04 万次工具调用、约 260 次错误，`byDay` 各字段与 `totals` 求和闭合，`byTool`/`byDayTool` 的 calls/errs/ms/measured 闭合，未截断时会话明细 tokens 之和等于总量，响应约 182KB、无 NaN，聚合耗时约 50ms（日志已载入内存）；client mock 注册通过；mini React 渲染 full / empty / legacy 三套 fixture × zh/en × 四页签全部通过；`pnpm pack --dry-run` 白名单未变
+- 状态：已完成
+
 ### 2026-10-11 token-usage v0.3.1 首载提速（预热 + SWR）与按模型 id 聚合
 
 - 模块：dsh-token-usage

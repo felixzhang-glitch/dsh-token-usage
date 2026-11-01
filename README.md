@@ -1,6 +1,11 @@
 # dsh-token-usage
 
-DeepSeek Harness (DSH) token 用量统计插件：指标卡、活跃热力图、按天趋势（top5 模型堆叠柱 + 缓存命中率折线）、模型占比环图，挂载 设置 → 用量统计
+DeepSeek Harness (DSH) 用量统计插件：Token / 工具调用（MCP、skills、CLI、文件、网络、Agent）/ 会话指标，四页签（总览、工具、会话、模型），挂载 设置 → 用量统计
+
+- 总览：指标卡、活跃热力图、按天趋势（top5 模型堆叠柱 + 缓存命中率折线）
+- 工具：分类占比、每日调用趋势、Top 工具、技能与 MCP 服务排名、错误率与平均耗时
+- 会话：会话数/主次会话、每日会话、轮次结果、工作区分布、可排序会话明细
+- 模型：模型占比环图与明细
 
 > 前身 dsh-panel 插件集合仓库已于 2026-09-27 裁剪为本单插件包（只保留 token 统计能力）；原 dspm 管理命令与 dsh-time-awareness 模块已移除，历史沿革见 `docs/requirements.md`
 
@@ -27,8 +32,8 @@ dsh plugin --profile <profile> add /Users/name/dsh-token-usage
 
 ```
 lib/               # 插件本体
-  index.js         # host 半：聚合 session 日志，注册 GET /token-usage/stats（预热 + SWR 缓存 + 单飞）
-  client.js        # client 半：ModuleLoader 包装的浏览器 bundle，注入 settings.section 槽位
+  index.js         # host 半：聚合 token / 工具 / 会话日志，注册 GET /token-usage/stats（预热 + SWR 缓存 + 单飞）
+  client.js        # client 半：ModuleLoader 包装的浏览器 bundle，四页签注入 settings.section 槽位
 cordis.patch.yml   # 组合包挂载行（dsh.bundle.patch 声明）
 package.json       # exports + dsh.bundle + dsh.client + peerDependencies + files 白名单
 ```
@@ -42,7 +47,7 @@ node --check lib/index.js && node --check lib/client.js
 - 安装失败 → 插件页报错详情；诊断日志在 `~/.dsh/profiles/<profile>/.plugin-manager/logs`
 - 设置页无「用量统计」→ 插件页确认该包已启用，再浏览器硬刷新（client 半）/ 重启 DSH（host 半）
 - 条目出现但一直加载 → `/token-usage/stats` 返回 500 时看响应 `error` 字段
-- 数据为空 → 确认有带 usage 的模型请求
+- 数据为空 → 确认有带 usage 的模型请求或工具调用；fork 会话继承历史按 seed 边界去重
 
 ## 维护
 

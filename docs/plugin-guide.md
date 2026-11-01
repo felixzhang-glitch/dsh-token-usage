@@ -3,7 +3,7 @@
 以 `dsh-token-usage`（用量统计）为实例，覆盖静态 Cordis 插件从开发到分发的完整链路
 
 > 适用对象：DeepSeek Harness 0.1.0-rc 系列桌面版与 web（0.1.7-rc.2 实读核对；桌面版即 web 面内嵌）
-> 实例插件：设置页用量统计，host 聚合 `/token-usage/stats` 路由 + client 单页多视图 UI（时间范围筛选、指标卡、活跃热力图、按天趋势、模型用量）
+> 实例插件：设置页用量统计，host 聚合 `/token-usage/stats` 路由 + client 四页签 UI（总览 / 工具 / 会话 / 模型；时间范围筛选、指标卡、热力图、趋势、工具与会话排名）
 > 分发通道：官方组合包（bundle）——桌面版/web 插件页「添加插件」或 `dsh plugin --profile <p> add <spec>`
 
 ## 插件的两种形态
@@ -186,23 +186,27 @@ window.__ModuleLoader__.load({
 
 本插件用到的关键契约
 
-- `sessionQuery.listSessions(): Promise<SessionRecord[]>`，record 含 `header`（id/createdAt/parentSession?/seedLength?）
-- `sessionQuery.readSession(id): Promise<SessionLogSnapshot>`，`{ session, events }` 全量原始日志
+- `sessionQuery.listSessions(): Promise<SessionRecord[]>`，record 含 `header`（id/createdAt/cwd/parentSession?/delegationDepth?）
+- `sessionQuery.readSession(id): Promise<SessionLogSnapshot>`，`{ session, inheritedEventCount, events }` 全量原始日志
 - 事件：`assistant/message` 的 `data.usage`（TokenUsage：`inputTokens/outputTokens` 必有，`cacheReadTokens/cacheWriteTokens/reasoningTokens` 可选，reasoning 已含在 output 内）+ `data.message.source.{provider,model}` + 事件级 `time`（epoch ms）与 `seq`
-- fork 去重：子会话日志物理包含 seed 事件，`seedLength > 0` 且父会话在语料内时跳过 `seq < seedLength`
+- 工具事件：`tool/call` 的 `data.name/arguments/turn/step/callId`，`tool/result` 的 `data.message.toolCallId`（旧格式回退 `message.source.callId`）与 `message.isError`/`data.error`
+- 会话事件：`step/start`/`step/end`（步数与模型耗时）、`turn/end.data.reason.kind`（completed/error/aborted/interrupted）、`user/message`、`session/title`、`subagent/descriptor`
+- fork 去重：子会话日志物理包含 seed 事件，`header.seedLength` 或 `readSession.inheritedEventCount` 给出边界；父会话在语料内时跳过 `seq < 边界` 的事件
 - `webServer.register(route: WebRoute): () => void`，route 为 `{ kind: 'exact'|'prefix', path, handler(req,res) }`，handler 全权负责响应
 
 ### host 开发要点
 
 - 聚合类服务做成「缓存 + 强制刷新」：本例 60 秒 TTL，`?refresh=1` 绕过；并发扫描用固定 worker 池（8），单会话失败计数不中断整体
-- 输出保持 JSON-safe 扁平结构（`{in,cr,cw,out,reason,req}` 桶），不泄漏 Cordis 活对象
+- 单次 `readSession` 同时折叠 token / 工具 / 步数 / 会话指标，避免为不同视图重复读日志；工具耗时按 callId 配对，归属 call 当天
+- 输出保持 JSON-safe 扁平结构（TokenBucket + 每日桶 + `toolStats` / `sessionStats`），不泄漏 Cordis 活对象
 - 路由响应头带 `cache-control: no-store`，错误路径也返回 JSON
 
 ### client 开发要点
 
-- 组件状态机三态（loading/error/ready）+ 空数据态，错误信息直接展示并给重试
-- 图表零图表库：柱状用纯 div 堆叠（flex-grow 按 token 数加权），折线用 SVG polyline 覆盖层（viewBox 0-100 + non-scaling-stroke），环图用 circle stroke-dasharray，热力图用 CSS grid
+- 组件状态机三态（loading/error/ready）+ 各页签空数据态，错误信息直接展示并给重试
+- 图表零图表库：柱状用纯 div 堆叠（flex-grow 按数值加权），折线用 SVG polyline 覆盖层（viewBox 0-100 + non-scaling-stroke），环图用 circle stroke-dasharray，热力图用 CSS grid，分类占比/轮次结果用横向堆叠条
 - 卡片/按钮/图例走 `--dsw-alias-*` 边框背景 token，系列色走 `--dsw-static-*` 固定色 token，视觉与宿主一致且适配深浅色
+- 多视图用页签（总览 / 工具 / 会话 / 模型），时间范围全局共享；工具与会话明细用原生 table + 外层横向滚动
 - 数据视图按时间范围筛选，聚合结果一次取全，前端只切片
 
 ### 本地验证（三层，不启动 DSH）

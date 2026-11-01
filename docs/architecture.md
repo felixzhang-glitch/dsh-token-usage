@@ -15,20 +15,34 @@
 ~/.dsh/sessions/**/session.jsonl.zstd
         │ sessionQuery.listSessions / readSession
         ▼
-collect() 聚合（8 worker 并发，fork seedLength 去重）
+collect() 单次扫描聚合（8 worker 并发，fork seed 去重）
+  ├─ token：assistant/message.data.usage
+  ├─ 工具：tool/call + tool/result（callId 配对耗时与错误）
+  ├─ 步数/耗时：step/start / assistant/message / step/end
+  ├─ 会话：header.createdAt/cwd/delegationDepth、session/title、subagent/descriptor
         │ 60s TTL 缓存（?refresh=1 强刷）
         ▼
 GET /token-usage/stats（webServer.register，JSON-safe 扁平桶）
         │ fetch
         ▼
-client.js 三视图渲染（时间范围切片，前端不重复聚合）
+client.js 四页签渲染（总览 / 工具 / 会话 / 模型，前端只做范围切片）
 ```
 
 ### host 半（lib/index.js）
 
-- `collect(sessionQuery)`：扫全部会话，只取 `assistant/message` 事件的 `data.usage`，按总量/按天/按模型（仅 model id，不区分 provider）/按天×模型四个视图折叠成 `Bucket = {in,cr,cw,out,reason,req,turns}`
-- fork 去重：`seedLength > 0` 且父会话在语料内时跳过 `seq < seedLength` 的 seed 事件
-- turns 用每桶独立的 turn id Set 去重后计数；单会话读取失败只计数不中断
+- `collect(sessionQuery)`：扫全部会话（读取失败只计 `failed`），一次折叠全部视图
+  - token / 请求 / 完成轮次：`assistant/message` 的 `data.usage`，按总量/按天/按模型/按天×模型折叠；`turns` 保持“带 usage 的 assistant/message 去重 turn”口径
+  - 工具：`tool/call` 按名计 calls；`skill` 用 `arguments.name` 生成 `skill:<name>` 维度；MCP 保留 `mcp__server__tool`；`tool/result` 按 `message.toolCallId` / `message.source.callId` / `data.callId` 配对，错误取 `message.isError` 或 `data.error`，耗时取 call→result 墙钟并归属 call 当天；未配对 result 不归属工具、不计错误/耗时
+  - 工具分类：`mcp / skill / cli / file / web / agent / session / other`，未知工具归 `other`
+  - 会话时间：`step/start`→`assistant/message` 累加 `llmMs`；`step/end` 计步数；`turn/end.reason.kind` 计 completed/error/aborted/interrupted；`user/message` 计用户消息
+  - 会话元数据：header 的 `createdAt/cwd/delegationDepth/parentSession` 计开始日、主/子会话、工作区；`session/title` 取最新标题，缺失时回退 `subagent/descriptor.label`；每日活跃会话按会话 id 去重
+  - fork 去重：`header.seedLength` 或 `readSession.inheritedEventCount` 作为 seed 边界，父会话在语料内时跳过 seed 事件；所有指标共用同一判定。父会话缺失时继承历史仍会重复计入（已知边界）
+  - 会话明细：每会话 token/req/turns/steps/toolCalls/toolErrs/消息/主模型/标题/cwd/lastAt；按 `lastAt` 降序，最多 1000 行，超出置 `rowsTruncated`
+- 响应 schema
+  - `totals` / `byDay`：TokenBucket + `steps/llmMs/toolMs/toolMeasured/userMsgs/asstMsgs/toolCalls/toolErrs/turnOk/turnErr/turnAbort/turnInterrupt`；`byDay` 另带 `sessionsStarted/mainStarted/subStarted/activeSessions`
+  - `byModel`：TokenBucket（仅 model id）；`byDayModel`：`{d,m,in,cr,cw,out,req}`
+  - `toolStats.byTool` / `byDayTool`：`{n,c,calls,errs,ms,measured}`（每日行另带 `d`）
+  - `sessionStats`：`{total,main,sub,workspaces,activeDays,rowsTruncated,rows[]}`
 - `apply(ctx)`：激活即后台预热一次全量扫描；闭包缓存为 stale-while-revalidate（非强制请求直接回缓存，过期则后台重建；`?refresh=1` 强制 await 重建，5s 冷却；pending single-flight 保证至多一次扫描）；路由注册包在 `ctx.effect` 内，卸载即注销
 - 响应头 `cache-control: no-store`，错误路径也返回 JSON
 
@@ -37,7 +51,8 @@ client.js 三视图渲染（时间范围切片，前端不重复聚合）
 - `window.__ModuleLoader__.load` 手写包装（无打包器），`require('react')` 取 shell 静态模块
 - `ctx.slots.inject("settings.section", ...)` 注册槽位条目，槽位未声明时自动等待
 - 样式经 `ctx.effect` 注入 `<style>`，只用 `--dsw-*` token；locale 经 `ctx.get('locale')` 订阅切换
-- 组件状态机：loading/error/ready + 空数据态；图表零依赖（div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图）
+- 组件状态机：loading/error/ready + 各页签空数据态；四页签（总览 / 工具 / 会话 / 模型）共享全局时间范围
+- 图表零依赖：div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图、横向堆叠条与排名条；工具与会话明细用原生 `<table>`
 
 ### 部署拓扑（官方组合包通道）
 
