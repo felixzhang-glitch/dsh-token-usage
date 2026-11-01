@@ -8,6 +8,20 @@
 
 ## 记录
 
+### 2026-11-01 token-usage v0.5.0 主 Agent / 子 Agent 对比（不新增页签）
+
+- 模块：dsh-token-usage
+- 需求：展示子 Agent 与主 Agent 的对比数据，不新增页签
+- 结果：
+  - host 新增 `agentComparison.byDay`：每天维护 main / sub 两个 SplitBucket（sessions/tokens/req/turns/steps/toolCalls/toolErrs/llmMs/toolMs/toolMeasured/ok/err/abort/interrupt），按事件日累计；每日 main + sub 必须等于现有 `byDay`
+  - 会话行新增 `kind: "main" | "subagent"` 与 `subagentType: "subagent" | "team" | "workflow"`；主/子判定改为 `origin === "subagent"` 或 `delegationDepth > 0`，修正 v0.4.0 把 seeded fork 误算子会话的问题
+  - 子 Agent 类型关联：`team/member.member.id` → team，`tool-workflow/agent-start.childId` → workflow，其余为通用 subagent
+  - client 会话页新增「主 Agent vs 子 Agent」对比卡：新建会话、Tokens、工具调用、完成轮次、平均 Tokens/会话、平均工具调用/会话、平均活跃耗时/会话、成功率，主蓝 / 子琥珀双色横条对比；底部显示子 Agent 来源与调用方式
+  - 会话页新增「每日主 / 子对比」趋势卡，miniTabs 切换 Tokens / 工具调用；会话明细增加 全部 / 主 / 子 筛选与主 / 子 / 子·团队 / 子·Workflow 类型徽标
+  - 文档同步：requirements / architecture / design / README / PRODUCT / TEST / FRONTEND / SECURITY / AGENTS / plugin-guide；版本 0.5.0
+- 验证：`node --check lib/*.js` 双文件通过；host mock 读取真实会话日志——388 个磁盘会话（主 316 / 子 72）、子 Agent 类型 48 通用 / 14 团队 / 10 Workflow、seeded fork 未误判；`agentComparison.byDay` 每天 main + sub 的 sessions/tokens/req/turns/steps/toolCalls/toolErrs/llmMs/toolMs/toolMeasured/ok/err/abort/interrupt 与 `byDay` 全字段闭合（0 差异）、无 NaN，响应约 208KB、聚合耗时约 68ms（日志已载入内存）；client mini React 渲染 full / empty / legacy 三套 fixture × zh/en × 四页签全部通过，会话页对比卡/来源/调用方式/筛选/类型徽标文本断言通过；`pnpm pack --dry-run` 白名单未变
+- 状态：已完成
+
 ### 2026-11-01 token-usage v0.4.0 工具调用与会话统计
 
 - 模块：dsh-token-usage

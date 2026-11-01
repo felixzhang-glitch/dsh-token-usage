@@ -23,8 +23,10 @@
 7. 工具统计闭合：`sum(byTool.calls) === sum(byDayTool.calls) === totals.toolCalls`，errs/ms/measured 同样闭合；技能维度键为 `skill:<name>`，MCP 为 `mcp__server__tool`
 8. 工具耗时配对：按 callId 配对 `tool/call → tool/result`，未配对调用只计 calls；错误用 `message.isError`/`data.error`，不走文本启发式
 9. fork 去重：`header.seedLength` 或 `readSession.inheritedEventCount` 跳过 seed 事件，token 与工具/会话指标都不能重复计入父会话历史
-10. 会话统计：会话开始日、主/子会话、每日活跃会话、轮次结果、工作区、会话明细 tokens 之和（未截断时）与总量闭合
-11. 旧/空数据兼容：响应缺 `toolStats`/`sessionStats` 或全零时 client 不崩，按页签显示空态
+10. 会话统计：会话开始日、主/子会话、每日活跃会话、轮次结果、工作区、会话明细 tokens 之和（未截断时）与总量闭合；主/子判定用 `origin === "subagent"` 或 `delegationDepth > 0`，seeded fork 必须归主会话
+11. 主/子拆分：每天 `main + sub` 的 sessions/tokens/req/turns/steps/toolCalls/toolErrs/llmMs/toolMs/toolMeasured/ok/err/abort/interrupt 均等于现有 `byDay` 对应字段
+12. 子 Agent 类型：`team/member.member.id`、`tool-workflow/agent-start.childId` 命中后分别归 team / workflow，其余归 subagent
+13. 旧/空数据兼容：响应缺 `toolStats`/`sessionStats`/`agentComparison` 或全零时 client 不崩，按页签显示空态
 
 ## 要点与用例映射
 
@@ -39,4 +41,4 @@
 - 桌面版插件页：inspect 通过 → 安装成功（bundles 登记）→ 重启后设置 → 用量统计出现
 - token-usage UI：四页签渲染、时间范围切换（工具/会话/模型同步过滤）、中英 locale、主题适配、各页签空数据态、`?refresh=1` 强刷
 - 工具页：分类占比、每日趋势、Top 工具表、技能/MCP 排名与 host JSON 一致
-- 会话页：会话卡、每日会话、轮次结果、工作区、明细排序与 host JSON 一致
+- 会话页：主/子对比卡、每日主/子 Tokens/工具切换、全部/主/子筛选、类型徽标、轮次结果、工作区、明细排序与 host JSON 一致

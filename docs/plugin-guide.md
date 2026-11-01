@@ -3,7 +3,7 @@
 以 `dsh-token-usage`（用量统计）为实例，覆盖静态 Cordis 插件从开发到分发的完整链路
 
 > 适用对象：DeepSeek Harness 0.1.0-rc 系列桌面版与 web（0.1.7-rc.2 实读核对；桌面版即 web 面内嵌）
-> 实例插件：设置页用量统计，host 聚合 `/token-usage/stats` 路由 + client 四页签 UI（总览 / 工具 / 会话 / 模型；时间范围筛选、指标卡、热力图、趋势、工具与会话排名）
+> 实例插件：设置页用量统计，host 聚合 `/token-usage/stats` 路由 + client 四页签 UI（总览 / 工具 / 会话 / 模型；时间范围筛选、指标卡、热力图、趋势、工具与会话排名、会话页主/子 Agent 对比）
 > 分发通道：官方组合包（bundle）——桌面版/web 插件页「添加插件」或 `dsh plugin --profile <p> add <spec>`
 
 ## 插件的两种形态
@@ -191,6 +191,8 @@ window.__ModuleLoader__.load({
 - 事件：`assistant/message` 的 `data.usage`（TokenUsage：`inputTokens/outputTokens` 必有，`cacheReadTokens/cacheWriteTokens/reasoningTokens` 可选，reasoning 已含在 output 内）+ `data.message.source.{provider,model}` + 事件级 `time`（epoch ms）与 `seq`
 - 工具事件：`tool/call` 的 `data.name/arguments/turn/step/callId`，`tool/result` 的 `data.message.toolCallId`（旧格式回退 `message.source.callId`）与 `message.isError`/`data.error`
 - 会话事件：`step/start`/`step/end`（步数与模型耗时）、`turn/end.data.reason.kind`（completed/error/aborted/interrupted）、`user/message`、`session/title`、`subagent/descriptor`
+- 子 Agent 关联：`team/member.member.id` 对应团队子会话 id；`tool-workflow/agent-start.childId` 对应 Workflow 子会话 id；header 的 `origin === "subagent"` 或 `delegationDepth > 0` 判定子会话，seeded fork 归主会话
+- 主/子对比：`agentComparison.byDay` 的 `main` / `sub` 桶按事件日累计，`sessions` 按 header.createdAt 归日；每日两侧相加等于全量 `byDay`
 - fork 去重：子会话日志物理包含 seed 事件，`header.seedLength` 或 `readSession.inheritedEventCount` 给出边界；父会话在语料内时跳过 `seq < 边界` 的事件
 - `webServer.register(route: WebRoute): () => void`，route 为 `{ kind: 'exact'|'prefix', path, handler(req,res) }`，handler 全权负责响应
 

@@ -1,7 +1,7 @@
 {
   "name": "dsh-token-usage",
-  "version": "0.4.0",
-  "description": "Token, tool-call, and session usage dashboard: host aggregation endpoint over session logs plus a settings-section UI with overview, tools, sessions, and models views",
+  "version": "0.5.0",
+  "description": "Token, tool-call, and session usage dashboard with main-vs-sub-agent comparison: host aggregation endpoint plus a settings-section UI with overview, tools, sessions, and models views",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

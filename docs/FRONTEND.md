@@ -26,6 +26,7 @@ dsh-token-usage/
 - 状态管理：组件内状态机（loading / error / ready + 各页签空数据态）；卸载竞态防护——fetch 挂 `AbortController`，卸载/重复加载时 abort，AbortError 静默
 - 请求层：静态插件没有 `host.call`，client 取 host 数据一律 fetch host 注册的 HTTP 路由；前端不重复聚合，只做时间范围切片与渲染
 - 多视图：页签（总览 / 工具 / 会话 / 模型）在 `Dashboard` 内用局部 state 切换；时间范围选择全局共享，四个视图都按同一 `from/to` 切片
+- 会话页对比：`agentComparison.byDay` 拆成 main / sub 两桶，对比卡用主/子双色横条；每日趋势用堆叠柱 + miniTabs 切 Tokens/工具；会话明细用 全部/主/子 miniTabs 过滤并显示类型徽标
 - 表格：工具/会话明细用原生 `<table>`，外层 `overflow-x:auto`；排名列表用 div 条，不引表格库
 - 文案：中英双语，经 `ctx.get('locale')` 订阅切换，禁止硬编码文案
 
@@ -33,6 +34,7 @@ dsh-token-usage/
 
 - 设计规范：跟随宿主主题，零图表库——能用 DOM/SVG/CSS 表达的可视化不引依赖（div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图、横向堆叠条与排名条）
 - 分类色固定映射 8 类（mcp / skill / cli / file / web / agent / session / other），只用 `--dsw-static-*` token
+- 主/子对比固定双色：主 Agent 用 blue-500，子 Agent 用 amber-500；团队 green-500，Workflow deepseek-500，避免主/子同色
 - 兼容性：DSH 桌面版与 web 部署（浏览器内核以宿主为准，桌面版即 web 面包内嵌）
 
 ## 性能要求
