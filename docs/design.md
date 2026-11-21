@@ -10,7 +10,7 @@ DeepSeek Harness (DSH) 的 token 用量统计静态插件（自用，仅 macOS�
 
 | 模块 | 功能 | 挂载位置 | 状态 |
 | --- | --- | --- | --- |
-| dsh-token-usage | 用量统计：Token / 工具调用（MCP / skills / CLI / 文件 / 网络 / Agent）/ 会话指标 + 会话页主/子 Agent 对比，四页签（总览、工具、会话、模型） | 设置 → 用量统计 | 已发布 v0.5.0 |
+| dsh-token-usage | 用量统计：Token / 工具调用（MCP / skills / CLI / 文件 / 网络 / Agent）/ 会话指标 + 会话页主/子 Agent 对比，四页签（总览、工具、会话、模型），指标条含环比 | 设置 → 用量统计 | 已发布 v0.6.0 |
 
 > 统计口径：token 与请求沿用 `assistant/message.data.usage`；工具调用来自 `tool/call` 与 `tool/result`，耗时按 callId 配对；会话统计来自 session header 与 `step/end`、`turn/end`、`session/title`；主/子判定用 `origin === "subagent"` 或 `delegationDepth > 0`；只输出聚合值与元数据，不输出消息正文或工具参数原文
 
@@ -23,6 +23,8 @@ DeepSeek Harness (DSH) 的 token 用量统计静态插件（自用，仅 macOS�
 - 副作用可逆：host 一切注册/订阅必须包在 `ctx.effect` 内并返回 disposer；client 样式随插件生命周期进出
 - 依赖显式声明：host 用 `inject` 列硬依赖服务，client 在 `package.json` 的 `dsh.client.inject` 列运行时/槽位包，`peerDependencies` 声明宿主契约
 - 主题与 locale 随宿主：样式只用 `--dsw-*` token，文案随 locale 中英切换，不自造色值与硬编码文案
+- 读数优先：体量一律一位小数的 亿 / 万（英 B / M / K）并进位提升，原始精确值只进 title；同一坐标轴刻度共用一种量纲，不逐刻度换单位
+- 信息密度优先于留白：指标条 8 格（4×2），卡片标题带强调条与右侧 hint，表格吸顶表头 + 吸底合计，图表悬浮提示复用同一张卡片
 - 零重依赖倾向：能用 DOM/SVG/CSS 表达的可视化不引图表库；`files` 白名单把分发面收敛到 lib / 挂载 patch / README
 
 ## 分发：官方组合包通道

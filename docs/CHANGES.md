@@ -4,6 +4,12 @@
 >
 > 分工：需求迭代记录继续走 `docs/requirements.md`（仓库既有约定），本文件记录 Harness 文档体系与平台级结构变更，避免双记
 
+### 2026-11-21 验证体系补一层：本机 headless 预览 + 断言脚本
+
+- 变更内容：验证从「语法 + 沙盒 + 实机」扩为四层，新增临时目录里的 React 18 + playwright-core 预览桩（直接加载 `lib/client.js`、吃真实 stats 响应），支持中英 / 明暗 / 视口宽度 / 页签切换，跑断言并出图；`TEST.md` 同步测试策略与要点（数值口径、环比基准）
+- 原因：UI 重构缺少可视与可断言的中间层，纯实机人工验证成本高、易漏
+- 影响范围：仅验证流程与文档；插件代码无额外依赖（预览桩不入仓库、不进 `files` 白名单）
+
 ### 2026-09-27 仓库裁剪：dsh-panel 插件集合 → 单插件 dsh-token-usage
 
 - 变更内容：删除 dspm / third-party.json / modules/（dsh-time-awareness），仓库根收敛为 dsh-token-usage 单插件包并组合包化（dsh.bundle.patch / files 白名单 / peerDependencies / inject 收敛）；分发层移交 DSH 官方 plugin-manager（桌面版/web 插件页、dsh plugin CLI）；reference 删除过时 bun.md、新增 dsh-plugin-manager.md

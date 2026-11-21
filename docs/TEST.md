@@ -2,11 +2,12 @@
 
 ## 测试策略
 
-- 测试层级：当前无自动化测试框架；验证分三层——语法静态检查（`node --check`）、沙盒安装演练（假 profile + runtime pnpm）、实机插件页人工验证
+- 测试层级：当前无自动化测试框架；验证分四层——语法静态检查（`bun build` / `node --check`）、本机 headless 预览断言、沙盒安装演练（假 profile + runtime pnpm）、实机插件页人工验证
 - 运行方式：
   - 语法：`node --check lib/*.js`；无独立 node 环境时用 DSH 桌面版自带 runtime node（`DSH_DESKTOP_NODE_EXECUTABLE="<app 主进程路径>" "<app>/Contents/Resources/runtime/bin/node"`）
   - 打包：`pnpm pack --dry-run` 核对 `files` 白名单（仅 lib / cordis.patch.yml / README.md + 自动项）
   - 沙盒：临时目录拼假 profile（`package.json` + `pnpm-workspace.yaml` 骨架：nodeLinker hoisted、autoInstallPeers false），runtime pnpm `add <仓库绝对路径>`，断言 node_modules 实体与 `link:` 依赖写入；不碰真实 profile
+  - 预览：临时目录里用 React 18 + `playwright-core`（本机 Chrome）搭一个 ModuleLoader 桩，直接加载 `lib/client.js`，fetch 打到录制好的 `/token-usage/stats` 真数据；可切换 zh/en、明暗、视口宽度与页签，脚本化断言（亿级口径、合计行、页签渲染、口径切换、筛选、无运行时报错）并出截图
   - 实机：插件页「添加插件」粘贴本地目录或 GitHub 地址 → 重启 DSH → 设置页验证
 - 覆盖率要求：不设量化指标；每次改动必须过语法检查，涉及包声明（bundle / files / peers / inject）的改动必须过 pack 与沙盒演练
 
@@ -27,6 +28,8 @@
 11. 主/子拆分：每天 `main + sub` 的 sessions/tokens/req/turns/steps/toolCalls/toolErrs/llmMs/toolMs/toolMeasured/ok/err/abort/interrupt 均等于现有 `byDay` 对应字段
 12. 子 Agent 类型：`team/member.member.id`、`tool-workflow/agent-start.childId` 命中后分别归 team / workflow，其余归 subagent
 13. 旧/空数据兼容：响应缺 `toolStats`/`sessionStats`/`agentComparison` 或全零时 client 不崩，按页签显示空态
+14. 数值口径：亿级显示一位小数（`15.4亿`）、万级一位小数、进位提升不出现 `10000.0万`；同一坐标轴刻度共用一种量纲；精确值保留在 `title`
+15. 环比基准：`prevAgg` 取区间前一等长窗口，无基期时显示「新增」/「—」，不得出现 `NaN`、`Infinity`、`-0.0%`
 
 ## 要点与用例映射
 
@@ -40,5 +43,6 @@
 
 - 桌面版插件页：inspect 通过 → 安装成功（bundles 登记）→ 重启后设置 → 用量统计出现
 - token-usage UI：四页签渲染、时间范围切换（工具/会话/模型同步过滤）、中英 locale、主题适配、各页签空数据态、`?refresh=1` 强刷
+- 数值与图表：亿/万单位、环比箭头、坐标轴量纲统一、图表悬停提示、表格排序与合计行、热力图三种口径与跨度切换、760px 窄屏指标条两列
 - 工具页：分类占比、每日趋势、Top 工具表、技能/MCP 排名与 host JSON 一致
 - 会话页：主/子对比卡、每日主/子 Tokens/工具切换、全部/主/子筛选、类型徽标、轮次结果、工作区、明细排序与 host JSON 一致

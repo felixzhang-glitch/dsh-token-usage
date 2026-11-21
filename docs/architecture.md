@@ -44,6 +44,7 @@ client.js 四页签渲染（总览 / 工具 / 会话 / 模型，前端只做范�
   - fork 去重：`header.seedLength` 或 `readSession.inheritedEventCount` 作为 seed 边界，父会话在语料内时跳过 seed 事件；所有指标共用同一判定。父会话缺失时继承历史仍会重复计入（已知边界）
   - 会话明细：每会话 token/req/turns/steps/toolCalls/toolErrs/消息/主模型/标题/cwd/lastAt/kind/subagentType；按 `lastAt` 降序，最多 1000 行，超出置 `rowsTruncated`
 - 响应 schema
+  - 顶层：`generatedAt`（毫秒时间戳）、`durationMs`（本次全量扫描耗时，命中缓存时保留首次值）、`sessions`、`failed`
   - `totals` / `byDay`：TokenBucket + `steps/llmMs/toolMs/toolMeasured/userMsgs/asstMsgs/toolCalls/toolErrs/turnOk/turnErr/turnAbort/turnInterrupt`；`byDay` 另带 `sessionsStarted/mainStarted/subStarted/activeSessions`
   - `byModel`：TokenBucket（仅 model id）；`byDayModel`：`{d,m,in,cr,cw,out,req}`
   - `agentComparison.byDay`：`{d, main: SplitBucket, sub: SplitBucket}`；`SplitBucket = {sessions,tokens,req,turns,steps,toolCalls,toolErrs,llmMs,toolMs,toolMeasured,ok,err,abort,interrupt}`
@@ -57,9 +58,15 @@ client.js 四页签渲染（总览 / 工具 / 会话 / 模型，前端只做范�
 - `window.__ModuleLoader__.load` 手写包装（无打包器），`require('react')` 取 shell 静态模块
 - `ctx.slots.inject("settings.section", ...)` 注册槽位条目，槽位未声明时自动等待
 - 样式经 `ctx.effect` 注入 `<style>`，只用 `--dsw-*` token；locale 经 `ctx.get('locale')` 订阅切换
-- 组件状态机：loading/error/ready + 各页签空数据态；四页签（总览 / 工具 / 会话 / 模型）共享全局时间范围
-- 会话页：主/子对比卡（指标 + 横向对比条）、每日主/子 Tokens/工具趋势、会话明细 全部/主/子 筛选与类型徽标
-- 图表零依赖：div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图、横向堆叠条与排名条；工具与会话明细用原生 `<table>`
+- 组件状态机：loading（骨架屏）/ error / ready + 各页签空数据态；四页签（总览 / 工具 / 会话 / 模型）共享全局时间范围，范围含 7/14/30/90 天、全部、自定义
+- 派生层（`Dashboard` 内，无额外请求）：区间切片 → `agg` 与前一等长窗口 `prevAgg`（环比基准）、模型聚合与 top5 尾桶、工具分类聚合与尾桶、会话行、主/子每日拆分；热力图固定用全量历史，不受范围影响
+- 组件层：
+  - `MetricRail` 8 格指标条（值 + 单位 + 环比 + 脚注），四个页签各一套指标
+  - `Card`（标题 / hint / 右侧控件 / flush body）承载所有区块
+  - `BarChart`：堆叠柱 + 可选右轴折线（`scale` + `format` 支持计数轴与百分比轴两种），ResizeObserver 决定刻度密度，悬停渲染单张提示卡
+  - `DataTable`：列定义驱动，表头吸顶、可排序、合计行吸底、空态占位
+  - `Heatmap`：口径（Tokens / 工具 / 会话）× 跨度（180 天 / 1 年），格子尺寸按容器宽度自适应，右侧常驻连续活跃 / 峰值 / 活跃天数
+- 图表零依赖：div 堆叠柱、SVG polyline 折线、circle stroke-dasharray 环图、CSS grid 热力图、横向堆叠条与占比条；表格用原生 `<table>`
 
 ### 部署拓扑（官方组合包通道）
 
